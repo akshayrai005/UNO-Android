@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="UnoCardView">
+        <attr name="cardColor" format="string" />
+        <attr name="cardValue" format="string" />
+        <attr name="isPlayable" format="boolean" />
+        <attr name="isSelected" format="boolean" />
+        <attr name="showBack" format="boolean" />
+    </declare-styleable>
+</resources>

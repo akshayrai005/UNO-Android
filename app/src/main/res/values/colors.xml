@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UNO Brand Colors -->
+    <color name="uno_red">#E53935</color>
+    <color name="uno_red_dark">#B71C1C</color>
+    <color name="uno_red_light">#FF6F6F</color>
+    <color name="uno_green">#43A047</color>
+    <color name="uno_green_dark">#2E7D32</color>
+    <color name="uno_blue">#1E88E5</color>
+    <color name="uno_blue_dark">#1565C0</color>
+    <color name="uno_yellow">#FDD835</color>
+    <color name="uno_yellow_dark">#F9A825</color>
+    <color name="uno_gold">#FFD700</color>
+
+    <!-- Wild Colors (multi) -->
+    <color name="wild_purple">#6A1B9A</color>
+    <color name="wild_purple_dark">#4A148C</color>
+
+    <!-- Backgrounds -->
+    <color name="bg_home">#0D1B2A</color>
+    <color name="bg_dark">#0A1628</color>
+    <color name="bg_darker">#060E1A</color>
+    <color name="bg_card">#111E30</color>
+    <color name="bg_table">#0F2744</color>
+    <color name="bg_table_center">#0A1F38</color>
+    <color name="bg_surface">#172033</color>
+    <color name="bg_surface_elevated">#1E2A40</color>
+    <color name="bg_overlay">#1AFFFFFF</color>
+    <color name="bg_overlay_strong">#33FFFFFF</color>
+
+    <!-- Text Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="white_90">#E6FFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="white_50">#80FFFFFF</color>
+    <color name="white_30">#4DFFFFFF</color>
+    <color name="white_20">#33FFFFFF</color>
+    <color name="white_10">#1AFFFFFF</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0C4DE</color>
+    <color name="text_hint">#607D9B</color>
+    <color name="text_disabled">#405070</color>
+
+    <!-- Input -->
+    <color name="input_bg">#162030</color>
+    <color name="input_stroke">#2A3F5F</color>
+    <color name="input_stroke_focused">#1E88E5</color>
+
+    <!-- Game UI -->
+    <color name="turn_gold">#FFD700</color>
+    <color name="turn_bg">#33FFD700</color>
+    <color name="playable_glow">#80FFD700</color>
+    <color name="danger_red">#FF1744</color>
+    <color name="success_green">#00E676</color>
+    <color name="card_shadow">#80000000</color>
+    <color name="draw_pile_bg">#0E3A6E</color>
+    <color name="discard_pile_bg">#0A2A50</color>
+    <color name="player_active_bg">#1AFFD700</color>
+    <color name="player_inactive_bg">#0DFFFFFF</color>
+
+    <!-- Status colors -->
+    <color name="connected">#00E676</color>
+    <color name="disconnected">#FF1744</color>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Card sizes -->
+    <dimen name="card_width">80dp</dimen>
+    <dimen name="card_height">120dp</dimen>
+    <dimen name="card_width_large">90dp</dimen>
+    <dimen name="card_height_large">135dp</dimen>
+    <dimen name="card_corner_radius">12dp</dimen>
+    <dimen name="card_margin">3dp</dimen>
+    <dimen name="card_overlap">52dp</dimen>
+
+    <!-- Draw / discard pile -->
+    <dimen name="pile_width">80dp</dimen>
+    <dimen name="pile_height">120dp</dimen>
+
+    <!-- Spacing -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">16dp</dimen>
+    <dimen name="spacing_lg">24dp</dimen>
+    <dimen name="spacing_xl">32dp</dimen>
+
+    <!-- Avatar -->
+    <dimen name="avatar_size">36dp</dimen>
+    <dimen name="avatar_size_large">48dp</dimen>
+
+    <!-- Text sizes -->
+    <dimen name="text_xs">10sp</dimen>
+    <dimen name="text_sm">12sp</dimen>
+    <dimen name="text_md">14sp</dimen>
+    <dimen name="text_lg">16sp</dimen>
+    <dimen name="text_xl">18sp</dimen>
+    <dimen name="text_xxl">22sp</dimen>
+    <dimen name="text_logo">72sp</dimen>
+
+    <!-- UI elements -->
+    <dimen name="button_height">52dp</dimen>
+    <dimen name="button_corner">12dp</dimen>
+    <dimen name="color_dot_size">48dp</dimen>
+    <dimen name="turn_indicator_height">40dp</dimen>
+    <dimen name="player_panel_height">90dp</dimen>
+    <dimen name="hand_height">128dp</dimen>
+    <dimen name="bottom_bar_height">64dp</dimen>
+    <dimen name="color_indicator_size">18dp</dimen>
+</resources>
