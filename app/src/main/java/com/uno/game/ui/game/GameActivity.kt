@@ -1,15 +1,12 @@
 package com.uno.game.ui.game
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.uno.game.audio.SoundManager
 import com.uno.game.audio.VoiceChatManager
@@ -22,12 +19,10 @@ class GameActivity : AppCompatActivity() {
     private val viewModel: GameViewModel by viewModels()
     private lateinit var handAdapter: CardHandAdapter
     private lateinit var playerListAdapter: PlayerListAdapter
-    private var voiceChatManager: VoiceChatManager? = null
     private var pendingWildCard: UnoCard? = null
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
-        const val MIC_PERMISSION_CODE = 101
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,50 +30,44 @@ class GameActivity : AppCompatActivity() {
         binding = ActivityGameBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: finish().let { return }
-        val playerId = PreferencesManager.getPlayerId(this) ?: return
+        val roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: run { finish(); return }
+        val playerId = PreferencesManager.getPlayerId(this) ?: run { finish(); return }
 
         viewModel.roomCode = roomCode
         viewModel.currentPlayerId = playerId
         viewModel.initSocket()
 
-        setupUI()
+        setupRecyclerViews()
+        setupButtons()
         observeGame()
-        requestMicPermission()
+
+        SoundManager.init(this)
     }
 
-    private fun setupUI() {
-        // Hand RecyclerView (horizontal scroll)
-        handAdapter = CardHandAdapter { card ->
-            onCardClicked(card)
-        }
+    private fun setupRecyclerViews() {
+        // Hand - horizontal
+        handAdapter = CardHandAdapter { card -> onCardClicked(card) }
         binding.rvHand.apply {
             layoutManager = LinearLayoutManager(this@GameActivity, LinearLayoutManager.HORIZONTAL, false)
             adapter = handAdapter
         }
 
-        // Other players list
+        // Other players - horizontal at top
         playerListAdapter = PlayerListAdapter { player ->
-            // Long click challenges UNO
             viewModel.challengeUno(player.id)
-            Toast.makeText(this, "Challenged ${player.username} for UNO!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Challenged ${player.username}!", Toast.LENGTH_SHORT).show()
         }
         binding.rvPlayers.apply {
-            layoutManager = LinearLayoutManager(this@GameActivity)
+            layoutManager = LinearLayoutManager(this@GameActivity, LinearLayoutManager.HORIZONTAL, false)
             adapter = playerListAdapter
         }
+    }
 
-        // Draw card button
-        binding.btnDraw.setOnClickListener {
-            if (viewModel.isMyTurn()) {
-                viewModel.drawCard()
-                SoundManager.playCardDraw()
-            } else {
-                Toast.makeText(this, "It's not your turn!", Toast.LENGTH_SHORT).show()
-            }
-        }
+    private fun setupButtons() {
+        // Click draw pile OR draw button both draw
+        binding.btnDrawPile.setOnClickListener { drawCard() }
+        binding.btnDraw.setOnClickListener { drawCard() }
 
-        // UNO button
         binding.btnUno.setOnClickListener {
             viewModel.sayUno()
             SoundManager.playUno()
@@ -86,25 +75,24 @@ class GameActivity : AppCompatActivity() {
                 .withEndAction { binding.btnUno.animate().scaleX(1f).scaleY(1f).duration = 150 }
         }
 
-        // Voice chat toggle
-        binding.btnVoice.setOnClickListener {
-            voiceChatManager?.let { vm ->
-                val muted = vm.toggleMute()
-                binding.btnVoice.alpha = if (muted) 0.5f else 1.0f
-                Toast.makeText(this, if (muted) "Muted" else "Unmuted", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        // Sound mute
         binding.btnMuteSound.setOnClickListener {
             val muted = SoundManager.toggleMute()
             binding.btnMuteSound.alpha = if (muted) 0.5f else 1.0f
         }
     }
 
+    private fun drawCard() {
+        if (!viewModel.isMyTurn()) {
+            Toast.makeText(this, "It's not your turn!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        viewModel.drawCard()
+        SoundManager.playCardDraw()
+    }
+
     private fun onCardClicked(card: UnoCard) {
         if (!viewModel.isMyTurn()) {
-            Toast.makeText(this, "Wait for your turn!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "It's not your turn!", Toast.LENGTH_SHORT).show()
             return
         }
         if (card.isWild()) {
@@ -134,58 +122,77 @@ class GameActivity : AppCompatActivity() {
 
     private fun observeGame() {
         viewModel.gameState.observe(this) { state ->
-            // Update top card
+            // Top card
             state.topCard?.let { card ->
                 binding.cardTop.setCard(card)
-                binding.tvCurrentColor.setBackgroundColor(getColorFromString(state.currentColor))
-                binding.tvDeckCount.text = "Deck: ${state.deckCount}"
             }
 
-            // My hand
-            val myHand = state.players.find { it.id == viewModel.currentPlayerId }?.hand
-            myHand?.let { handAdapter.submitList(it) }
+            // Current color indicator
+            binding.tvCurrentColor.setBackgroundColor(
+                when (state.currentColor) {
+                    "red"    -> Color.parseColor("#E53935")
+                    "green"  -> Color.parseColor("#43A047")
+                    "blue"   -> Color.parseColor("#1E88E5")
+                    "yellow" -> Color.parseColor("#FDD835")
+                    else     -> Color.GRAY
+                }
+            )
+
+            // Deck count
+            binding.tvDeckCountText.text = "Deck: ${state.deckCount}"
+
+            // Direction
+            binding.tvDirection.text = if (state.direction == 1) "→ Clockwise" else "← Counter"
+
+            // My hand - find my player
+            val myPlayer = state.players.find { it.id == viewModel.currentPlayerId }
+            val myHand = myPlayer?.hand ?: emptyList()
+            handAdapter.submitList(myHand)
 
             // Other players
-            playerListAdapter.submitList(viewModel.getOtherPlayers())
+            val others = state.players.filter { it.id != viewModel.currentPlayerId }
+            playerListAdapter.submitList(others)
 
             // Turn indicator
             val isMyTurn = state.currentPlayerId == viewModel.currentPlayerId
-            binding.tvTurnIndicator.text = if (isMyTurn) "YOUR TURN!" else "Waiting..."
-            binding.tvTurnIndicator.alpha = if (isMyTurn) 1f else 0.5f
+            binding.tvTurnIndicator.text = if (isMyTurn) "⭐ YOUR TURN!" else {
+                val currentName = state.players.find { it.id == state.currentPlayerId }?.username ?: "..."
+                "$currentName's turn"
+            }
+            binding.tvTurnIndicator.setBackgroundColor(
+                if (isMyTurn) Color.parseColor("#33FFD700") else Color.parseColor("#22FFFFFF")
+            )
+            binding.tvTurnIndicator.setTextColor(
+                if (isMyTurn) Color.parseColor("#FFD700") else Color.WHITE
+            )
             binding.btnDraw.isEnabled = isMyTurn
 
             // Pending draw
             if (state.pendingDraw > 0) {
-                binding.btnDraw.text = "Draw ${state.pendingDraw}"
-                binding.btnDraw.setBackgroundColor(getColor(android.R.color.holo_red_dark))
+                binding.btnDraw.text = "Draw ${state.pendingDraw} ⚠️"
+                binding.btnDraw.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
             } else {
                 binding.btnDraw.text = "Draw Card"
-                binding.btnDraw.setBackgroundColor(getColor(android.R.color.holo_blue_dark))
+                binding.btnDraw.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1E88E5"))
             }
 
-            // UNO button visibility
-            val myCardCount = myHand?.size ?: 0
-            binding.btnUno.visibility = if (myCardCount == 1) View.VISIBLE else View.GONE
-
-            // Direction arrow
-            binding.tvDirection.text = if (state.direction == 1) "→ Clockwise" else "← Counter"
+            // UNO button
+            binding.btnUno.visibility = if (myHand.size == 1) View.VISIBLE else View.GONE
         }
 
         viewModel.unoEvent.observe(this) { playerId ->
-            val playerName = viewModel.gameState.value?.players
-                ?.find { it.id == playerId }?.username ?: "Someone"
-            Toast.makeText(this, "🃏 $playerName said UNO!", Toast.LENGTH_SHORT).show()
+            val name = viewModel.gameState.value?.players?.find { it.id == playerId }?.username ?: "Someone"
+            Toast.makeText(this, "🃏 $name said UNO!", Toast.LENGTH_SHORT).show()
             SoundManager.playUno()
         }
 
         viewModel.winnerEvent.observe(this) { winnerId ->
-            val winnerName = viewModel.gameState.value?.players
-                ?.find { it.id == winnerId }?.username ?: "Unknown"
+            val name = viewModel.gameState.value?.players?.find { it.id == winnerId }?.username ?: "Unknown"
             SoundManager.playWin()
             AlertDialog.Builder(this)
                 .setTitle("🎉 Game Over!")
-                .setMessage("$winnerName wins! 🏆")
-                .setPositiveButton("Back to Lobby") { _, _ -> finish() }
+                .setMessage("$name wins! 🏆")
+                .setPositiveButton("Back to Menu") { _, _ -> finish() }
                 .setCancelable(false)
                 .show()
         }
@@ -195,51 +202,8 @@ class GameActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestMicPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                MIC_PERMISSION_CODE
-            )
-        } else {
-            initVoiceChat()
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == MIC_PERMISSION_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                initVoiceChat()
-            } else {
-                Toast.makeText(this, "Microphone denied - voice chat disabled", Toast.LENGTH_LONG).show()
-                binding.btnVoice.isEnabled = false
-                binding.btnVoice.alpha = 0.4f
-            }
-        }
-    }
-
-    private fun initVoiceChat() {
-        voiceChatManager = VoiceChatManager(this, viewModel.roomCode)
-        voiceChatManager?.initialize()
-        binding.btnVoice.isEnabled = true
-    }
-
-    private fun getColorFromString(color: String?): Int = when (color) {
-        "red"    -> getColor(android.R.color.holo_red_light)
-        "green"  -> getColor(android.R.color.holo_green_light)
-        "blue"   -> getColor(android.R.color.holo_blue_light)
-        "yellow" -> getColor(android.R.color.holo_orange_light)
-        else     -> getColor(android.R.color.darker_gray)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        voiceChatManager?.release()
         SoundManager.release()
     }
 }
