@@ -17,54 +17,74 @@ class PlayerListAdapter(
     private val onChallengeClick: (Player) -> Unit
 ) : ListAdapter<Player, PlayerListAdapter.PlayerViewHolder>(PlayerDiffCallback()) {
 
-    /** The ID of the player whose turn it currently is */
     var activePlayerId: String? = null
-        set(value) {
-            field = value
-            notifyDataSetChanged()
-        }
+        set(value) { field = value; notifyDataSetChanged() }
+
+    // Medal emojis for finish positions
+    private val medals = listOf("🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣")
 
     inner class PlayerViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvName:    TextView = itemView.findViewById(R.id.tvPlayerName)
         val tvCards:   TextView = itemView.findViewById(R.id.tvCardCount)
         val tvUno:     TextView = itemView.findViewById(R.id.tvUnoAlert)
-        val vAvatar:   View    = itemView.findViewById(R.id.vAvatar)
+        val tvMedal:   TextView = itemView.findViewById(R.id.tvMedal)
+        val vAvatar:   View     = itemView.findViewById(R.id.vAvatar)
         val tvInitial: TextView = itemView.findViewById(R.id.tvAvatarInitial)
-        val vActive:   View    = itemView.findViewById(R.id.vActiveIndicator)
+        val vActive:   View     = itemView.findViewById(R.id.vActiveIndicator)
 
         private var pulseAnim: ObjectAnimator? = null
 
         fun bind(player: Player) {
             tvName.text = player.username.take(10)
-            tvCards.text = "${player.cardCount}"
 
             // Avatar
             try { vAvatar.setBackgroundColor(Color.parseColor(player.avatarColor)) }
             catch (_: Exception) { vAvatar.setBackgroundColor(0xFFE53935.toInt()) }
             tvInitial.text = player.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
-            // Active turn indicator
-            val isActive = player.id == activePlayerId
-            vActive.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
-            itemView.setBackgroundResource(
-                if (isActive) R.drawable.bg_player_item_active
-                else R.drawable.bg_player_item
-            )
+            val finished = player.finishPosition != null
 
-            // UNO call badge
-            tvUno.visibility = if (player.saidUno) View.VISIBLE else View.GONE
-
-            // Danger highlight — 1 card but hasn't said UNO
-            if (player.cardCount == 1 && !player.saidUno) {
-                tvCards.setTextColor(0xFFFF1744.toInt())
-                startPulse(tvCards)
-            } else {
-                tvCards.setTextColor(Color.WHITE)
+            if (finished) {
+                // Show medal instead of card count
+                val pos = player.finishPosition!! - 1
+                val medal = medals.getOrElse(pos) { "🏅" }
+                tvMedal.text = medal
+                tvMedal.visibility = View.VISIBLE
+                tvCards.text = "✓ Done"
+                tvCards.setTextColor(Color.parseColor("#88FFFFFF"))
                 stopPulse(tvCards)
-            }
+                tvUno.visibility = View.GONE
+                // Dim finished players slightly
+                itemView.alpha = 0.65f
+                vActive.visibility = View.INVISIBLE
+                itemView.setBackgroundResource(R.drawable.bg_player_item)
+            } else {
+                tvMedal.visibility = View.GONE
+                itemView.alpha = if (player.isConnected) 1f else 0.4f
 
-            // Disconnected dim
-            itemView.alpha = if (player.isConnected) 1f else 0.4f
+                // Card count — show "X 🃏" format
+                tvCards.text = "${player.cardCount} 🃏"
+
+                // Active turn indicator
+                val isActive = player.id == activePlayerId
+                vActive.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
+                itemView.setBackgroundResource(
+                    if (isActive) R.drawable.bg_player_item_active
+                    else R.drawable.bg_player_item
+                )
+
+                // UNO badge
+                tvUno.visibility = if (player.saidUno) View.VISIBLE else View.GONE
+
+                // Danger highlight — 1 card, hasn't said UNO
+                if (player.cardCount == 1 && !player.saidUno) {
+                    tvCards.setTextColor(0xFFFF1744.toInt())
+                    startPulse(tvCards)
+                } else {
+                    tvCards.setTextColor(Color.WHITE)
+                    stopPulse(tvCards)
+                }
+            }
 
             // Long-press to challenge
             itemView.setOnLongClickListener { onChallengeClick(player); true }
