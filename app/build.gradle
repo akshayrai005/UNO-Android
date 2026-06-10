@@ -46,6 +46,9 @@ dependencies {
     implementation 'androidx.navigation:navigation-ui-ktx:2.8.5'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
 
+    // Splash Screen API (fixes Android 12+ white circle icon)
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+
     // Socket.IO
     implementation('io.socket:socket.io-client:2.1.0') {
         exclude group: 'org.json', module: 'json'
