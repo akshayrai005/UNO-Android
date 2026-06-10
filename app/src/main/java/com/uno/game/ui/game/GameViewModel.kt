@@ -1,13 +1,12 @@
 package com.uno.game.ui.game
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.uno.game.models.GameState
 import com.uno.game.models.Player
 import com.uno.game.network.SocketManager
-import kotlinx.coroutines.launch
 
 class GameViewModel : ViewModel() {
 
@@ -17,20 +16,28 @@ class GameViewModel : ViewModel() {
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
 
-    private val _unoEvent = MutableLiveData<String>() // playerId who said UNO
+    private val _unoEvent = MutableLiveData<String>()
     val unoEvent: LiveData<String> = _unoEvent
 
-    private val _winnerEvent = MutableLiveData<String>() // winner playerId
+    private val _winnerEvent = MutableLiveData<String>()
     val winnerEvent: LiveData<String> = _winnerEvent
 
     var currentPlayerId: String = ""
+    var currentUsername: String = ""
     var roomCode: String = ""
 
     fun initSocket() {
+        // Make sure socket is connected
+        if (!SocketManager.isConnected()) {
+            SocketManager.connect()
+        }
+
         SocketManager.onGameStarted = { state ->
+            Log.d("GameViewModel", "game_started received, players=${state.players.size}")
             _gameState.postValue(state)
         }
         SocketManager.onGameState = { state ->
+            Log.d("GameViewModel", "game_state update, currentPlayer=${state.currentPlayerId}")
             _gameState.postValue(state)
             state.winner?.let { _winnerEvent.postValue(it) }
         }
@@ -59,7 +66,8 @@ class GameViewModel : ViewModel() {
     }
 
     fun isMyTurn(): Boolean {
-        return _gameState.value?.currentPlayerId == currentPlayerId
+        val state = _gameState.value ?: return false
+        return state.currentPlayerId == currentPlayerId
     }
 
     fun getMyHand() = _gameState.value?.players
@@ -73,5 +81,6 @@ class GameViewModel : ViewModel() {
         SocketManager.onGameStarted = null
         SocketManager.onGameState = null
         SocketManager.onUnoCalled = null
+        SocketManager.onError = null
     }
 }

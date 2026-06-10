@@ -16,7 +16,6 @@ import kotlinx.coroutines.launch
 class HomeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityHomeBinding
 
-    // Only 4 clean colors
     private val avatarColors = listOf("#E53935", "#1E88E5", "#43A047", "#FB8C00")
     private var selectedColor = "#E53935"
 
@@ -25,25 +24,38 @@ class HomeActivity : AppCompatActivity() {
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Always create a fresh socket connection
+        SocketManager.disconnect()
         SocketManager.connect()
 
-        PreferencesManager.getUsername(this)?.let {
-            binding.etUsername.setText(it)
-        }
+        // Clear stale player ID so each session gets a fresh one from server
+        // (Keeps username for convenience)
+        val savedUsername = PreferencesManager.getUsername(this)
+        PreferencesManager.clear(this)
+        savedUsername?.let { binding.etUsername.setText(it) }
 
         setupColorPicker()
 
         binding.btnCreateRoom.setOnClickListener {
             val username = binding.etUsername.text.toString().trim()
-            if (username.isBlank()) { Toast.makeText(this, "Enter a username!", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            if (username.isBlank()) {
+                Toast.makeText(this, "Enter a username!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             createRoomFlow(username)
         }
 
         binding.btnJoinRoom.setOnClickListener {
             val username = binding.etUsername.text.toString().trim()
             val code = binding.etRoomCode.text.toString().trim().uppercase()
-            if (username.isBlank()) { Toast.makeText(this, "Enter a username!", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
-            if (code.isBlank()) { Toast.makeText(this, "Enter a room code!", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            if (username.isBlank()) {
+                Toast.makeText(this, "Enter a username!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (code.isBlank()) {
+                Toast.makeText(this, "Enter a room code!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             joinRoomFlow(username, code)
         }
     }
@@ -58,7 +70,6 @@ class HomeActivity : AppCompatActivity() {
                 view.scaleX = 1.3f; view.scaleY = 1.3f; view.alpha = 1f
             }
         }
-        // Select first by default
         colorViews[0].scaleX = 1.3f; colorViews[0].scaleY = 1.3f; colorViews[0].alpha = 1f
         colorViews.drop(1).forEach { it.alpha = 0.6f }
     }
@@ -69,6 +80,7 @@ class HomeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val playerResult = ApiService.createPlayer(username, selectedColor)
             playerResult.onSuccess { player ->
+                // Save the server-issued player ID
                 PreferencesManager.savePlayer(this@HomeActivity, player.id, username)
                 val roomResult = ApiService.createRoom(player.id)
                 roomResult.onSuccess { room ->
@@ -76,8 +88,12 @@ class HomeActivity : AppCompatActivity() {
                         putExtra(LobbyActivity.EXTRA_ROOM_CODE, room.roomCode)
                         putExtra(LobbyActivity.EXTRA_IS_HOST, true)
                     })
-                }.onFailure { Toast.makeText(this@HomeActivity, "Failed to create room", Toast.LENGTH_SHORT).show() }
-            }.onFailure { Toast.makeText(this@HomeActivity, "Error: ${it.message}", Toast.LENGTH_SHORT).show() }
+                }.onFailure {
+                    Toast.makeText(this@HomeActivity, "Failed to create room: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure {
+                Toast.makeText(this@HomeActivity, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
             binding.btnCreateRoom.isEnabled = true
             binding.btnCreateRoom.text = "CREATE ROOM"
         }
@@ -89,14 +105,19 @@ class HomeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val playerResult = ApiService.createPlayer(username, selectedColor)
             playerResult.onSuccess { player ->
+                // Save the server-issued player ID
                 PreferencesManager.savePlayer(this@HomeActivity, player.id, username)
                 ApiService.getRoom(code).onSuccess {
                     startActivity(Intent(this@HomeActivity, LobbyActivity::class.java).apply {
                         putExtra(LobbyActivity.EXTRA_ROOM_CODE, code)
                         putExtra(LobbyActivity.EXTRA_IS_HOST, false)
                     })
-                }.onFailure { Toast.makeText(this@HomeActivity, "Room not found!", Toast.LENGTH_SHORT).show() }
-            }.onFailure { Toast.makeText(this@HomeActivity, "Error: ${it.message}", Toast.LENGTH_SHORT).show() }
+                }.onFailure {
+                    Toast.makeText(this@HomeActivity, "Room not found!", Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure {
+                Toast.makeText(this@HomeActivity, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
             binding.btnJoinRoom.isEnabled = true
             binding.btnJoinRoom.text = "JOIN ROOM"
         }

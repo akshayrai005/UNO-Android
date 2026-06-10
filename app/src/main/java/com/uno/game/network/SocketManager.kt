@@ -17,10 +17,11 @@ object SocketManager {
     var onRoomUpdate: ((JSONObject) -> Unit)? = null
     var onGameStarted: ((GameState) -> Unit)? = null
     var onGameState: ((GameState) -> Unit)? = null
-    var onUnoCalled: ((String) -> Unit)? = null        // playerId
+    var onUnoCalled: ((String) -> Unit)? = null
     var onUnoChallenge: ((JSONObject) -> Unit)? = null
     var onPlayerDisconnected: ((String) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
+    var onConnectionChange: ((Boolean) -> Unit)? = null
 
     // Voice chat callbacks
     var onVoicePeerJoined: ((String) -> Unit)? = null
@@ -34,7 +35,8 @@ object SocketManager {
         try {
             val options = IO.Options.builder()
                 .setReconnection(true)
-                .setReconnectionAttempts(5)
+                .setReconnectionAttempts(10)
+                .setReconnectionDelay(1000)
                 .build()
             socket = IO.socket(BuildConfig.SERVER_URL, options)
             attachListeners()
@@ -49,15 +51,22 @@ object SocketManager {
         socket?.apply {
             on(Socket.EVENT_CONNECT) {
                 Log.d(TAG, "✅ Socket connected: ${id()}")
+                onConnectionChange?.invoke(true)
             }
             on(Socket.EVENT_DISCONNECT) {
                 Log.d(TAG, "❌ Socket disconnected")
+                onConnectionChange?.invoke(false)
+            }
+            on(Socket.EVENT_CONNECT_ERROR) { args ->
+                Log.e(TAG, "Connection error: ${args.firstOrNull()}")
             }
             on("room_update") { args ->
                 val obj = args[0] as JSONObject
+                Log.d(TAG, "room_update: $obj")
                 onRoomUpdate?.invoke(obj)
             }
             on("game_started") { args ->
+                Log.d(TAG, "game_started: ${args[0]}")
                 parseGameState(args[0])?.let { onGameStarted?.invoke(it) }
             }
             on("game_state") { args ->
@@ -76,7 +85,9 @@ object SocketManager {
             }
             on("error") { args ->
                 val obj = args[0] as JSONObject
-                onError?.invoke(obj.optString("message"))
+                val msg = obj.optString("message")
+                Log.e(TAG, "Server error: $msg")
+                onError?.invoke(msg)
             }
             // Voice
             on("voice_peer_joined") { args ->
@@ -120,10 +131,26 @@ object SocketManager {
     }
 
     fun startGame(roomCode: String, playerId: String) {
-        emit("start_game", JSONObject().apply {
+        val data = JSONObject().apply {
             put("roomCode", roomCode)
             put("playerId", playerId)
-        })
+        }
+        Log.d(TAG, "startGame emit — connected=${socket?.connected()}, data=$data")
+        if (socket?.connected() == true) {
+            socket?.emit("start_game", data)
+        } else {
+            Log.w(TAG, "Not connected! Attempting reconnect before start...")
+            onError?.invoke("Not connected to server. Trying to reconnect...")
+            // Try to reconnect and re-emit
+            socket?.connect()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (socket?.connected() == true) {
+                    socket?.emit("start_game", data)
+                } else {
+                    onError?.invoke("Still not connected. Check your internet connection.")
+                }
+            }, 2000)
+        }
     }
 
     fun playCard(roomCode: String, playerId: String, cardId: String, chosenColor: String? = null) {

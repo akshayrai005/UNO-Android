@@ -17,6 +17,7 @@ class LobbyActivity : AppCompatActivity() {
     private var roomCode: String = ""
     private var playerId: String = ""
     private var isHost: Boolean = false
+    private var currentPlayerCount = 0
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
@@ -49,14 +50,33 @@ class LobbyActivity : AppCompatActivity() {
         binding.rvLobbyPlayers.adapter = playerAdapter
 
         setupSocket()
-        SocketManager.joinRoom(roomCode, playerId, username)
+
+        // Make sure socket is connected before joining
+        if (!SocketManager.isConnected()) {
+            SocketManager.connect()
+            // Small delay to let connection establish
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                SocketManager.joinRoom(roomCode, playerId, username)
+            }, 1000)
+        } else {
+            SocketManager.joinRoom(roomCode, playerId, username)
+        }
 
         binding.btnStart.setOnClickListener {
-            if (isHost) {
-                SocketManager.startGame(roomCode, playerId)
-                binding.btnStart.isEnabled = false
-                binding.btnStart.text = "Starting..."
+            if (!isHost) return@setOnClickListener
+            if (!SocketManager.isConnected()) {
+                Toast.makeText(this, "⚠️ Not connected to server! Reconnecting...", Toast.LENGTH_SHORT).show()
+                SocketManager.connect()
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    if (SocketManager.isConnected()) {
+                        doStartGame()
+                    } else {
+                        Toast.makeText(this, "❌ Connection failed. Check internet.", Toast.LENGTH_LONG).show()
+                    }
+                }, 2000)
+                return@setOnClickListener
             }
+            doStartGame()
         }
 
         binding.btnCopyCode.setOnClickListener {
@@ -66,7 +86,30 @@ class LobbyActivity : AppCompatActivity() {
         }
     }
 
+    private fun doStartGame() {
+        if (currentPlayerCount < 2) {
+            Toast.makeText(this, "Need at least 2 players!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        SocketManager.startGame(roomCode, playerId)
+        binding.btnStart.isEnabled = false
+        binding.btnStart.text = "Starting..."
+    }
+
     private fun setupSocket() {
+        SocketManager.onConnectionChange = { connected ->
+            runOnUiThread {
+                if (!connected) {
+                    Toast.makeText(this, "⚠️ Disconnected from server...", Toast.LENGTH_SHORT).show()
+                    binding.btnStart.text = "Reconnecting..."
+                    binding.btnStart.isEnabled = false
+                } else {
+                    Toast.makeText(this, "✅ Connected!", Toast.LENGTH_SHORT).show()
+                    updateStartButton()
+                }
+            }
+        }
+
         SocketManager.onRoomUpdate = { json ->
             val players = json.optJSONArray("players")
             val list = mutableListOf<LobbyPlayer>()
@@ -82,21 +125,10 @@ class LobbyActivity : AppCompatActivity() {
                 }
             }
             runOnUiThread {
+                currentPlayerCount = list.size
                 playerAdapter.submitList(list)
                 binding.tvPlayerCount.text = "${list.size}/6 Players"
-
-                // Update START button state for host
-                if (isHost) {
-                    if (list.size >= 2) {
-                        binding.btnStart.isEnabled = true
-                        binding.btnStart.alpha = 1.0f
-                        binding.btnStart.text = "START GAME (${list.size} players)"
-                    } else {
-                        binding.btnStart.isEnabled = false
-                        binding.btnStart.alpha = 0.5f
-                        binding.btnStart.text = "Waiting for players..."
-                    }
-                }
+                if (isHost) updateStartButton()
             }
         }
 
@@ -111,11 +143,24 @@ class LobbyActivity : AppCompatActivity() {
 
         SocketManager.onError = { msg ->
             runOnUiThread {
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                binding.btnStart.isEnabled = true
-                binding.btnStart.alpha = 1.0f
-                binding.btnStart.text = "START GAME"
+                Toast.makeText(this, "❌ $msg", Toast.LENGTH_LONG).show()
+                if (isHost) {
+                    updateStartButton()
+                }
             }
+        }
+    }
+
+    private fun updateStartButton() {
+        if (!isHost) return
+        if (currentPlayerCount >= 2) {
+            binding.btnStart.isEnabled = true
+            binding.btnStart.alpha = 1.0f
+            binding.btnStart.text = "START GAME ($currentPlayerCount players)"
+        } else {
+            binding.btnStart.isEnabled = false
+            binding.btnStart.alpha = 0.5f
+            binding.btnStart.text = "Waiting for players..."
         }
     }
 
@@ -124,6 +169,7 @@ class LobbyActivity : AppCompatActivity() {
         SocketManager.onRoomUpdate = null
         SocketManager.onGameStarted = null
         SocketManager.onError = null
+        SocketManager.onConnectionChange = null
     }
 }
 
