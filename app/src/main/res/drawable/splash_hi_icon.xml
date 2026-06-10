@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Pink background circle -->
+    <path
+        android:fillColor="#FF69B4"
+        android:pathData="M54,54m-54,0a54,54 0,1 1,108 0a54,54 0,1 1,-108 0" />
+
+    <!-- "H" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M22,30 L22,78 L30,78 L30,58 L46,58 L46,78 L54,78 L54,30 L46,30 L46,50 L30,50 L30,30 Z" />
+
+    <!-- "i" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,38 L70,38 L70,78 L62,78 Z" />
+
+    <!-- dot on i -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,28 L70,28 L70,36 L62,36 Z" />
+
+    <!-- wave/hand emoji hint -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M78,60 Q82,50 86,55 Q90,45 86,65 Q84,72 78,74 Z" />
+
+</vector>
