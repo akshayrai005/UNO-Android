@@ -209,21 +209,55 @@ class GameActivity : AppCompatActivity() {
 
         val dialogBinding = DialogWinnerBinding.inflate(LayoutInflater.from(this))
 
-        // Build rankings list
-        val medals = listOf("🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣")
-        val rankings = state.finishOrder.mapNotNull { id ->
-            state.players.find { it.id == id }?.username
-        }
-        val container = dialogBinding.layoutRankings
-        rankings.forEachIndexed { i, name ->
+        // Build full rankings: finishOrder = players who finished (1st→Nth),
+        // then append anyone NOT in finishOrder (the last remaining loser).
+        val medals    = listOf("🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣")
+        val loserIcon = "💀"
+
+        val finishedIds  = state.finishOrder.toMutableList()
+        val loserIds     = state.players.map { it.id }.filter { it !in finishedIds }
+        val allRankedIds = finishedIds + loserIds   // losers appended at the end
+
+        val totalPlayers = allRankedIds.size
+        val container    = dialogBinding.layoutRankings
+
+        allRankedIds.forEachIndexed { i, id ->
+            val name     = state.players.find { it.id == id }?.username ?: id
+            val isLoser  = i == totalPlayers - 1   // last entry = the loser
+            val icon     = if (isLoser) loserIcon else medals.getOrElse(i) { "▪️" }
+            val label    = if (isLoser) "$icon $name  ← LOSER" else "$icon $name"
+
             val tv = android.widget.TextView(this).apply {
-                text = "${medals.getOrElse(i) { "▪️" }} $name"
-                textSize = if (i == 0) 20f else 15f
-                setTextColor(if (i == 0) android.graphics.Color.parseColor("#FFD700") else android.graphics.Color.parseColor("#E0E0E0"))
-                gravity = android.view.Gravity.CENTER
+                text      = label
+                textSize  = when (i) { 0 -> 20f; else -> 15f }
+                setTextColor(when {
+                    i == 0    -> android.graphics.Color.parseColor("#FFD700")  // gold
+                    isLoser   -> android.graphics.Color.parseColor("#EF5350")  // red for loser
+                    else      -> android.graphics.Color.parseColor("#E0E0E0")
+                })
+                gravity    = android.view.Gravity.CENTER
                 setPadding(0, if (i == 0) 0 else 4, 0, if (i == 0) 8 else 4)
             }
             container.addView(tv)
+        }
+
+        // Personalise header for the local player
+        val myPosition = allRankedIds.indexOf(viewModel.currentPlayerId)
+        val isIWinner  = myPosition == 0
+        val isILoser   = myPosition == totalPlayers - 1
+
+        dialogBinding.tvWinnerEmoji.text = when {
+            isIWinner -> "🏆"
+            isILoser  -> "😭"
+            else      -> "🎉"
+        }
+        dialogBinding.tvWinnerTitle.text = when {
+            isIWinner -> "YOU WON!"
+            isILoser  -> "YOU LOST 💀"
+            else      -> "GAME OVER"
+        }
+        if (isILoser) {
+            dialogBinding.tvWinnerTitle.setTextColor(android.graphics.Color.parseColor("#EF5350"))
         }
 
         val dialog = AlertDialog.Builder(this, R.style.Theme_UNO)

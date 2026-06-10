@@ -8,6 +8,7 @@
     android:background="@drawable/bg_form_card">
 
     <TextView
+        android:id="@+id/tvWinnerEmoji"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="🎉"
@@ -15,6 +16,7 @@
         android:layout_marginBottom="4dp" />
 
     <TextView
+        android:id="@+id/tvWinnerTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="GAME OVER"

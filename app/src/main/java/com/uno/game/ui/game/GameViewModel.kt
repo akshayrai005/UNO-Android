@@ -41,7 +41,11 @@ class GameViewModel : ViewModel() {
         SocketManager.onGameState = { state ->
             Log.d("GameViewModel", "game_state --- currentPlayer=\${state.currentPlayerId}")
             _gameState.postValue(state)
-            state.winner?.takeIf { it.isNotBlank() }?.let { _winnerEvent.postValue(it) }
+            // Only show Game Over when the game is FULLY finished (like Ludo — last player standing loses)
+            // not when the first player empties their hand.
+            if (state.status == "finished") {
+                state.winner?.takeIf { it.isNotBlank() }?.let { _winnerEvent.postValue(it) }
+            }
         }
         SocketManager.onUnoCalled = { playerId ->
             _unoEvent.postValue(playerId)
