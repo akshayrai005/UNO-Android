@@ -23,9 +23,10 @@ object SocketManager {
     var onPlayerFinished: ((String, Int) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
     var onConnectionChange: ((Boolean) -> Unit)? = null
-
-    // Called when server auto-plays a drawn card (playerId, cardValue)
     var onCardAutoPlayed: ((String, String) -> Unit)? = null
+
+    // Called after socket reconnects so activities can re-emit join_room
+    var onReconnected: (() -> Unit)? = null
 
     // Voice chat callbacks
     var onVoicePeerJoined: ((String) -> Unit)? = null
@@ -39,8 +40,10 @@ object SocketManager {
         try {
             val options = IO.Options.builder()
                 .setReconnection(true)
-                .setReconnectionAttempts(10)
-                .setReconnectionDelay(1000)
+                .setReconnectionAttempts(Int.MAX_VALUE)   // never give up
+                .setReconnectionDelay(1000)               // 1s first retry
+                .setReconnectionDelayMax(5000)            // max 5s between retries
+                .setTimeout(20000)                        // 20s connect timeout
                 .build()
             socket = IO.socket(BuildConfig.SERVER_URL, options)
             attachListeners()
@@ -57,12 +60,19 @@ object SocketManager {
                 Log.d(TAG, "✅ Socket connected: ${id()}")
                 onConnectionChange?.invoke(true)
             }
-            on(Socket.EVENT_DISCONNECT) {
-                Log.d(TAG, "❌ Socket disconnected")
+            on(Socket.EVENT_DISCONNECT) { args ->
+                Log.d(TAG, "❌ Socket disconnected: ${args.firstOrNull()}")
                 onConnectionChange?.invoke(false)
             }
             on(Socket.EVENT_CONNECT_ERROR) { args ->
                 Log.e(TAG, "Connection error: ${args.firstOrNull()}")
+            }
+            // Socket.IO fires "reconnect" after a successful reconnection
+            on("reconnect") { args ->
+                Log.d(TAG, "🔄 Socket reconnected (attempt ${args.firstOrNull()})")
+                // Notify activities so they can re-join their rooms
+                onReconnected?.invoke()
+                onConnectionChange?.invoke(true)
             }
             on("room_update") { args ->
                 val obj = args[0] as JSONObject
@@ -95,12 +105,10 @@ object SocketManager {
                 Log.e(TAG, "Server error: $msg")
                 onError?.invoke(msg)
             }
-            // Auto-played card notification (drawn card matched and was played automatically)
             on("card_auto_played") { args ->
                 val obj = args[0] as JSONObject
                 val playerId = obj.optString("playerId")
                 val cardValue = obj.optJSONObject("card")?.optString("value") ?: ""
-                Log.d(TAG, "card_auto_played: player=$playerId card=$cardValue")
                 onCardAutoPlayed?.invoke(playerId, cardValue)
             }
             // Voice
@@ -218,8 +226,16 @@ object SocketManager {
     }
 
     private fun emit(event: String, data: JSONObject) {
-        if (socket?.connected() == true) socket?.emit(event, data)
-        else Log.w(TAG, "Not connected, can't emit $event")
+        if (socket?.connected() == true) {
+            socket?.emit(event, data)
+        } else {
+            Log.w(TAG, "Not connected, can't emit $event — queuing reconnect")
+            // Try to reconnect then re-emit once
+            socket?.connect()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (socket?.connected() == true) socket?.emit(event, data)
+            }, 2000)
+        }
     }
 
     fun requestGameState(roomCode: String) {
