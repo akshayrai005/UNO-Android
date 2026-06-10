@@ -1,34 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="56dp"
+    android:layout_height="64dp"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="10dp"
-    android:background="#22FFFFFF"
-    android:layout_marginBottom="6dp">
+    android:paddingHorizontal="12dp"
+    android:background="@drawable/bg_lobby_card"
+    android:layout_marginBottom="8dp">
 
-    <View
-        android:id="@+id/vAvatar"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:background="@drawable/circle_shape"
-        android:layout_marginEnd="12dp" />
+    <!-- Avatar circle with initial -->
+    <FrameLayout
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginEnd="12dp">
 
-    <TextView
-        android:id="@+id/tvPlayerName"
+        <View
+            android:id="@+id/vAvatar"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/circle_shape" />
+
+        <TextView
+            android:id="@+id/tvAvatarInitial"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/white" />
+    </FrameLayout>
+
+    <!-- Name + seat -->
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold" />
+        android:orientation="vertical">
 
+        <TextView
+            android:id="@+id/tvPlayerName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvSeat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Host badge -->
     <TextView
-        android:id="@+id/tvSeat"
+        android:id="@+id/tvHostBadge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#AAFFFFFF"
-        android:textSize="13sp" />
+        android:text=" HOST "
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:textColor="@color/uno_gold"
+        android:background="@drawable/bg_turn_indicator"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:visibility="gone" />
+
+    <!-- Online dot -->
+    <View
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:background="@drawable/circle_shape"
+        android:backgroundTint="@color/connected"
+        android:layout_marginStart="10dp" />
 
 </LinearLayout>

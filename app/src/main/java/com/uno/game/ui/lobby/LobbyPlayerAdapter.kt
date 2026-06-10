@@ -11,15 +11,28 @@ import androidx.recyclerview.widget.RecyclerView
 import com.uno.game.R
 
 class LobbyPlayerAdapter : ListAdapter<LobbyPlayer, LobbyPlayerAdapter.VH>(Diff()) {
+
+    /** The host's player ID — set this to show the HOST badge. */
+    var hostId: String = ""
+
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val tvName: TextView = v.findViewById(R.id.tvPlayerName)
-        val tvSeat: TextView = v.findViewById(R.id.tvSeat)
-        val vColor: View = v.findViewById(R.id.vAvatar)
+        val tvName: TextView    = v.findViewById(R.id.tvPlayerName)
+        val tvSeat: TextView    = v.findViewById(R.id.tvSeat)
+        val tvInitial: TextView = v.findViewById(R.id.tvAvatarInitial)
+        val vColor: View        = v.findViewById(R.id.vAvatar)
+        val tvHost: TextView    = v.findViewById(R.id.tvHostBadge)
 
         fun bind(p: LobbyPlayer) {
-            tvName.text = p.username
-            tvSeat.text = "Seat ${p.seatPosition + 1}"
-            try { vColor.setBackgroundColor(Color.parseColor(p.avatarColor)) } catch (_: Exception) {}
+            tvName.text    = p.username
+            tvSeat.text    = "Seat ${p.seatPosition + 1}"
+            tvInitial.text = p.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+            tvHost.visibility = if (p.id == hostId) View.VISIBLE else View.GONE
+
+            try {
+                vColor.setBackgroundColor(Color.parseColor(p.avatarColor))
+            } catch (_: Exception) {
+                vColor.setBackgroundColor(Color.parseColor("#FF6B6B"))
+            }
         }
     }
 
@@ -29,7 +42,7 @@ class LobbyPlayerAdapter : ListAdapter<LobbyPlayer, LobbyPlayerAdapter.VH>(Diff(
     override fun onBindViewHolder(h: VH, pos: Int) = h.bind(getItem(pos))
 
     class Diff : DiffUtil.ItemCallback<LobbyPlayer>() {
-        override fun areItemsTheSame(a: LobbyPlayer, b: LobbyPlayer) = a.id == b.id
+        override fun areItemsTheSame(a: LobbyPlayer, b: LobbyPlayer)  = a.id == b.id
         override fun areContentsTheSame(a: LobbyPlayer, b: LobbyPlayer) = a == b
     }
 }

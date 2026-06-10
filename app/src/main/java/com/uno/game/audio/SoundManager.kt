@@ -6,33 +6,36 @@ import android.media.SoundPool
 import com.uno.game.R
 
 object SoundManager {
-    private lateinit var soundPool: SoundPool
-    private var soundUno = 0
+    private var soundPool: SoundPool? = null
+    private var soundUno      = 0
     private var soundCardPlay = 0
     private var soundCardDraw = 0
-    private var soundWin = 0
-    private var soundReverse = 0
-    private var soundSkip = 0
-    private var soundDraw4 = 0
+    private var soundWin      = 0
+    private var soundReverse  = 0
+    private var soundSkip     = 0
+    private var soundDraw4    = 0
     private var isMuted = false
 
     fun init(context: Context) {
+        if (soundPool != null) return   // already initialised
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         soundPool = SoundPool.Builder()
-            .setMaxStreams(5)
+            .setMaxStreams(6)
             .setAudioAttributes(attrs)
             .build()
 
-        soundUno      = soundPool.load(context, R.raw.sound_uno, 1)
-        soundCardPlay = soundPool.load(context, R.raw.sound_card_play, 1)
-        soundCardDraw = soundPool.load(context, R.raw.sound_card_draw, 1)
-        soundWin      = soundPool.load(context, R.raw.sound_win, 1)
-        soundReverse  = soundPool.load(context, R.raw.sound_reverse, 1)
-        soundSkip     = soundPool.load(context, R.raw.sound_skip, 1)
-        soundDraw4    = soundPool.load(context, R.raw.sound_draw4, 1)
+        soundPool!!.let { sp ->
+            soundUno      = sp.load(context, R.raw.sound_uno,       1)
+            soundCardPlay = sp.load(context, R.raw.sound_card_play, 1)
+            soundCardDraw = sp.load(context, R.raw.sound_card_draw, 1)
+            soundWin      = sp.load(context, R.raw.sound_win,       1)
+            soundReverse  = sp.load(context, R.raw.sound_reverse,   1)
+            soundSkip     = sp.load(context, R.raw.sound_skip,      1)
+            soundDraw4    = sp.load(context, R.raw.sound_draw4,     1)
+        }
     }
 
     fun playUno()      { play(soundUno) }
@@ -45,7 +48,7 @@ object SoundManager {
 
     private fun play(soundId: Int) {
         if (!isMuted && soundId != 0) {
-            soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+            soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
         }
     }
 
@@ -55,6 +58,9 @@ object SoundManager {
     }
 
     fun release() {
-        soundPool.release()
+        soundPool?.release()
+        soundPool = null
+        soundUno = 0; soundCardPlay = 0; soundCardDraw = 0
+        soundWin = 0; soundReverse  = 0; soundSkip     = 0; soundDraw4 = 0
     }
 }

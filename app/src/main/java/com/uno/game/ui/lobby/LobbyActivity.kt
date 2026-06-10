@@ -1,27 +1,32 @@
 package com.uno.game.ui.lobby
 
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.uno.game.R
 import com.uno.game.databinding.ActivityLobbyBinding
 import com.uno.game.network.SocketManager
 import com.uno.game.ui.game.GameActivity
 import com.uno.game.utils.PreferencesManager
 
 class LobbyActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivityLobbyBinding
     private lateinit var playerAdapter: LobbyPlayerAdapter
-    private var roomCode: String = ""
-    private var playerId: String = ""
-    private var isHost: Boolean = false
+
+    private var roomCode   = ""
+    private var playerId   = ""
+    private var isHost     = false
     private var currentPlayerCount = 0
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
-        const val EXTRA_IS_HOST = "is_host"
+        const val EXTRA_IS_HOST   = "is_host"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,105 +34,115 @@ class LobbyActivity : AppCompatActivity() {
         binding = ActivityLobbyBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: return
-        isHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
-        playerId = PreferencesManager.getPlayerId(this) ?: return
-        val username = PreferencesManager.getUsername(this) ?: return
+        roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: run { finish(); return }
+        isHost   = intent.getBooleanExtra(EXTRA_IS_HOST, false)
+        playerId = PreferencesManager.getPlayerId(this) ?: run { finish(); return }
+        val username = PreferencesManager.getUsername(this) ?: run { finish(); return }
 
-        binding.tvRoomCode.text = "Room: $roomCode"
+        binding.tvRoomCode.text = roomCode
 
-        // Show START button only for host, disabled until 2+ players
+        // Start button — only visible for host
         if (isHost) {
             binding.btnStart.visibility = View.VISIBLE
-            binding.btnStart.isEnabled = false
-            binding.btnStart.alpha = 0.5f
-            binding.btnStart.text = "Waiting for players..."
+            updateStartButton()
         } else {
             binding.btnStart.visibility = View.GONE
         }
 
-        playerAdapter = LobbyPlayerAdapter()
-        binding.rvLobbyPlayers.adapter = playerAdapter
+        playerAdapter = LobbyPlayerAdapter().also {
+            if (isHost) it.hostId = playerId
+        }
 
-        setupSocket()
+        binding.rvLobbyPlayers.apply {
+            layoutManager = LinearLayoutManager(this@LobbyActivity)
+            adapter = playerAdapter
+        }
 
-        // Make sure socket is connected before joining
+        setupSocketListeners()
+
+        // Join the room (with small delay if socket just connected)
         if (!SocketManager.isConnected()) {
             SocketManager.connect()
-            // Small delay to let connection establish
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            Handler(Looper.getMainLooper()).postDelayed({
                 SocketManager.joinRoom(roomCode, playerId, username)
             }, 1000)
         } else {
             SocketManager.joinRoom(roomCode, playerId, username)
         }
 
-        binding.btnStart.setOnClickListener {
-            if (!isHost) return@setOnClickListener
-            if (!SocketManager.isConnected()) {
-                Toast.makeText(this, "⚠️ Not connected to server! Reconnecting...", Toast.LENGTH_SHORT).show()
-                SocketManager.connect()
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    if (SocketManager.isConnected()) {
-                        doStartGame()
-                    } else {
-                        Toast.makeText(this, "❌ Connection failed. Check internet.", Toast.LENGTH_LONG).show()
-                    }
-                }, 2000)
-                return@setOnClickListener
-            }
-            doStartGame()
-        }
+        binding.btnStart.setOnClickListener { handleStartClick() }
 
         binding.btnCopyCode.setOnClickListener {
             val clipboard = getSystemService(android.content.ClipboardManager::class.java)
             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Room Code", roomCode))
-            Toast.makeText(this, "✅ Room code copied!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.copied), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // ── Start button ─────────────────────────────────────────────────────────
+
+    private fun handleStartClick() {
+        if (!isHost) return
+        if (!SocketManager.isConnected()) {
+            Toast.makeText(this, "⚠️ Reconnecting…", Toast.LENGTH_SHORT).show()
+            SocketManager.connect()
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (SocketManager.isConnected()) doStartGame()
+                else Toast.makeText(this, "❌ Connection failed. Check internet.", Toast.LENGTH_LONG).show()
+            }, 2000)
+            return
+        }
+        doStartGame()
     }
 
     private fun doStartGame() {
         if (currentPlayerCount < 2) {
-            Toast.makeText(this, "Need at least 2 players!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.min_players), Toast.LENGTH_SHORT).show()
             return
         }
         SocketManager.startGame(roomCode, playerId)
         binding.btnStart.isEnabled = false
-        binding.btnStart.text = "Starting..."
+        binding.btnStart.text      = "Starting…"
     }
 
-    private fun setupSocket() {
+    // ── Socket ────────────────────────────────────────────────────────────────
+
+    private fun setupSocketListeners() {
         SocketManager.onConnectionChange = { connected ->
             runOnUiThread {
                 if (!connected) {
-                    Toast.makeText(this, "⚠️ Disconnected from server...", Toast.LENGTH_SHORT).show()
-                    binding.btnStart.text = "Reconnecting..."
-                    binding.btnStart.isEnabled = false
+                    Toast.makeText(this, "⚠️ Disconnected from server…", Toast.LENGTH_SHORT).show()
+                    if (isHost) {
+                        binding.btnStart.isEnabled = false
+                        binding.btnStart.text = "Reconnecting…"
+                    }
                 } else {
-                    Toast.makeText(this, "✅ Connected!", Toast.LENGTH_SHORT).show()
-                    updateStartButton()
+                    if (isHost) updateStartButton()
                 }
             }
         }
 
         SocketManager.onRoomUpdate = { json ->
-            val players = json.optJSONArray("players")
+            val playersArray = json.optJSONArray("players")
             val list = mutableListOf<LobbyPlayer>()
-            if (players != null) {
-                for (i in 0 until players.length()) {
-                    val p = players.getJSONObject(i)
+            if (playersArray != null) {
+                for (i in 0 until playersArray.length()) {
+                    val p = playersArray.getJSONObject(i)
                     list.add(LobbyPlayer(
-                        id = p.optString("id"),
-                        username = p.optString("username"),
-                        avatarColor = p.optString("avatar_color", "#FF6B6B"),
-                        seatPosition = p.optInt("seat_position")
+                        id            = p.optString("id"),
+                        username      = p.optString("username"),
+                        avatarColor   = p.optString("avatar_color", "#FF6B6B"),
+                        seatPosition  = p.optInt("seat_position")
                     ))
                 }
             }
+            // Detect host from room JSON if available
+            val hostFromJson = json.optString("host_id", "")
             runOnUiThread {
+                if (hostFromJson.isNotBlank()) playerAdapter.hostId = hostFromJson
                 currentPlayerCount = list.size
                 playerAdapter.submitList(list)
-                binding.tvPlayerCount.text = "${list.size}/6 Players"
+                binding.tvPlayerCount.text = getString(R.string.connected_players, list.size, 6)
                 if (isHost) updateStartButton()
             }
         }
@@ -144,38 +159,38 @@ class LobbyActivity : AppCompatActivity() {
         SocketManager.onError = { msg ->
             runOnUiThread {
                 Toast.makeText(this, "❌ $msg", Toast.LENGTH_LONG).show()
-                if (isHost) {
-                    updateStartButton()
-                }
+                if (isHost) updateStartButton()
             }
         }
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun updateStartButton() {
         if (!isHost) return
         if (currentPlayerCount >= 2) {
             binding.btnStart.isEnabled = true
-            binding.btnStart.alpha = 1.0f
-            binding.btnStart.text = "START GAME ($currentPlayerCount players)"
+            binding.btnStart.alpha     = 1f
+            binding.btnStart.text      = getString(R.string.start_game) + " ($currentPlayerCount players)"
         } else {
             binding.btnStart.isEnabled = false
-            binding.btnStart.alpha = 0.5f
-            binding.btnStart.text = "Waiting for players..."
+            binding.btnStart.alpha     = 0.5f
+            binding.btnStart.text      = getString(R.string.waiting_for_host)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        SocketManager.onRoomUpdate = null
-        SocketManager.onGameStarted = null
-        SocketManager.onError = null
+        SocketManager.onRoomUpdate      = null
+        SocketManager.onGameStarted     = null
+        SocketManager.onError           = null
         SocketManager.onConnectionChange = null
     }
 }
 
 data class LobbyPlayer(
-    val id: String,
-    val username: String,
-    val avatarColor: String,
+    val id:           String,
+    val username:     String,
+    val avatarColor:  String,
     val seatPosition: Int
 )
