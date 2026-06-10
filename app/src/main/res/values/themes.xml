@@ -16,7 +16,22 @@
         <item name="android:fontFamily">sans-serif</item>
     </style>
 
-    <style name="Theme.UNO.Splash" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.UNO.Splash" parent="Theme.SplashScreen">
+        <!-- Full baby photo as the splash screen background -->
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <!-- Use a transparent 1x1 icon so NO round icon appears -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bg</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <!-- After splash, transition to the real splash activity theme -->
+        <item name="postSplashScreenTheme">@style/Theme.UNO.SplashActivity</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Theme applied after installSplashScreen() — shows the full-screen baby photo activity -->
+    <style name="Theme.UNO.SplashActivity" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:windowBackground">@drawable/splash_screen</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowNoTitle">true</item>
