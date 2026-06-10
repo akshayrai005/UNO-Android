@@ -145,23 +145,39 @@ class GameActivity : AppCompatActivity() {
 
         binding.btnMuteSound.setOnClickListener {
             isMuted = SoundManager.toggleMute()
-            binding.btnMuteSound.setImageResource(
-                if (isMuted) R.drawable.ic_sound_off else R.drawable.ic_sound_on
-            )
+            updateSoundButtons(isMuted)
         }
 
         binding.btnMuteMic.setOnClickListener {
             isMicMuted = voiceChat.toggleMute()
-            binding.btnMuteMic.setImageResource(
-                if (isMicMuted) R.drawable.ic_mic_off else R.drawable.ic_mic_on
-            )
-            binding.btnMuteMic.backgroundTintList =
-                android.content.res.ColorStateList.valueOf(
-                    android.graphics.Color.parseColor(
-                        if (isMicMuted) "#B71C1C" else "#37474F"
-                    )
-                )
+            updateMicButtons(isMicMuted)
         }
+
+        // Spectator overlay mic/sound — same behaviour
+        binding.btnMuteSoundSpectator.setOnClickListener {
+            isMuted = SoundManager.toggleMute()
+            updateSoundButtons(isMuted)
+        }
+        binding.btnMuteMicSpectator.setOnClickListener {
+            isMicMuted = voiceChat.toggleMute()
+            updateMicButtons(isMicMuted)
+        }
+    }
+
+    private fun updateSoundButtons(muted: Boolean) {
+        val icon = if (muted) R.drawable.ic_sound_off else R.drawable.ic_sound_on
+        binding.btnMuteSound.setImageResource(icon)
+        binding.btnMuteSoundSpectator.setImageResource(icon)
+    }
+
+    private fun updateMicButtons(muted: Boolean) {
+        val icon = if (muted) R.drawable.ic_mic_off else R.drawable.ic_mic_on
+        val tint = if (muted) "#B71C1C" else "#37474F"
+        binding.btnMuteMic.setImageResource(icon)
+        binding.btnMuteMicSpectator.setImageResource(icon)
+        val tintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(tint))
+        binding.btnMuteMic.backgroundTintList = tintList
+        binding.btnMuteMicSpectator.backgroundTintList = tintList
     }
 
     // ── Draw card ─────────────────────────────────────────────────────────────
@@ -290,15 +306,15 @@ class GameActivity : AppCompatActivity() {
         val medals = listOf("🥇","🥈","🥉","4th","5th","6th")
         val medal = medals.getOrElse(myPosition - 1) { "${myPosition}th" }
 
-        // Hide hand + action controls
+        // Hide hand + game action buttons (Draw/UNO)
         binding.rvHand.visibility = View.GONE
         binding.layoutActionBar.visibility = View.GONE
 
-        // Show spectator bar
+        // Show spectator bar (has its own mic/sound buttons)
         binding.layoutSpectator.visibility = View.VISIBLE
-        binding.tvSpectatorTitle.text = "👀 SPECTATING — You finished $medal!"
-        binding.tvSpectatorSub.text = "Watching the remaining players battle it out..."
-        showEventToast("$medal You finished! Now spectating 👀")
+        binding.tvSpectatorTitle.text = "👀 $medal You finished! Spectating..."
+        binding.tvSpectatorSub.text = "Mic & Speaker buttons on the right →"
+        showEventToast("$medal Finished! Spectating now 👀")
     }
 
     // ── Game state observer ───────────────────────────────────────────────────
@@ -360,12 +376,9 @@ class GameActivity : AppCompatActivity() {
                 handAdapter.submitList(myHand.toList())
             }
 
-            // Show ALL players (including me) in top rail when spectating
-            val others = if (isSpectating) {
-                state.players
-            } else {
-                state.players.filter { it.id != viewModel.currentPlayerId }
-            }
+            // Always show ALL players in top rail (including myself)
+            // so everyone can see everyone's card count at a glance
+            val others = state.players
             playerListAdapter.activePlayerId = state.currentPlayerId
             playerListAdapter.submitList(others)
 
