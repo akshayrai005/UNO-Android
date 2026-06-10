@@ -9,7 +9,7 @@
     android:fitsSystemWindows="true">
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  TOP RAIL — Other players                                          -->
+    <!--  TOP RAIL — ALL players including ME                               -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPlayers"
@@ -220,7 +220,7 @@
         android:clipToPadding="false" />
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  BOTTOM ACTION BAR — paddingBottom pushes above nav bar           -->
+    <!--  BOTTOM ACTION BAR                                                 -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/layoutActionBar"
@@ -261,6 +261,7 @@
             android:layout_marginEnd="6dp"
             style="@style/Button.UNO.Action" />
 
+        <!-- Sound + Mic always visible, OUTSIDE spectator check -->
         <ImageButton
             android:id="@+id/btnMuteSound"
             android:layout_width="46dp"
@@ -283,42 +284,69 @@
     </LinearLayout>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  SPECTATOR OVERLAY                                                 -->
+    <!--  SPECTATOR OVERLAY — replaces draw/uno buttons but KEEPS mic+sound-->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/layoutSpectator"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:background="#CC0A0A2A"
-        android:paddingTop="14dp"
-        android:paddingHorizontal="20dp"
-        android:paddingBottom="28dp"
+        android:paddingTop="10dp"
+        android:paddingHorizontal="10dp"
+        android:paddingBottom="20dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/tvSpectatorTitle"
-            android:layout_width="wrap_content"
+        <!-- Spectator text takes most space -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="👀 SPECTATING"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="#FFD700"
-            android:gravity="center" />
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/tvSpectatorSub"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Waiting for game to finish..."
-            android:textSize="13sp"
-            android:textColor="#AAFFFFFF"
-            android:gravity="center"
-            android:layout_marginTop="4dp" />
+            <TextView
+                android:id="@+id/tvSpectatorTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="👀 SPECTATING"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#FFD700" />
+
+            <TextView
+                android:id="@+id/tvSpectatorSub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Watching remaining players..."
+                android:textSize="11sp"
+                android:textColor="#AAFFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <!-- Mic + Sound buttons still accessible while spectating -->
+        <ImageButton
+            android:id="@+id/btnMuteSoundSpectator"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:src="@drawable/ic_sound_on"
+            android:backgroundTint="@color/bg_surface_elevated"
+            android:contentDescription="Toggle sound"
+            android:padding="10dp" />
+
+        <ImageButton
+            android:id="@+id/btnMuteMicSpectator"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:src="@drawable/ic_mic_on"
+            android:backgroundTint="@color/bg_surface_elevated"
+            android:contentDescription="Toggle microphone"
+            android:padding="10dp"
+            android:layout_marginStart="6dp" />
 
     </LinearLayout>
 
