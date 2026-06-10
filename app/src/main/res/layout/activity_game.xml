@@ -5,7 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_game_table"
-    android:keepScreenOn="true">
+    android:keepScreenOn="true"
+    android:fitsSystemWindows="true">
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  TOP RAIL — Other players                                          -->
@@ -219,14 +220,16 @@
         android:clipToPadding="false" />
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  BOTTOM ACTION BAR                                                 -->
+    <!--  BOTTOM ACTION BAR — paddingBottom pushes above nav bar           -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/layoutActionBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="10dp"
+        android:paddingTop="10dp"
+        android:paddingHorizontal="10dp"
+        android:paddingBottom="20dp"
         android:gravity="center_vertical"
         android:background="@drawable/bg_bottom_action_bar"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -280,7 +283,7 @@
     </LinearLayout>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  SPECTATOR OVERLAY — shown when local player has finished          -->
+    <!--  SPECTATOR OVERLAY                                                 -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/layoutSpectator"
@@ -289,8 +292,9 @@
         android:orientation="vertical"
         android:gravity="center"
         android:background="#CC0A0A2A"
-        android:paddingVertical="14dp"
+        android:paddingTop="14dp"
         android:paddingHorizontal="20dp"
+        android:paddingBottom="28dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
