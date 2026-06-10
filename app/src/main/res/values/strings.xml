@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">UNO</string>
+    <string name="app_name">Srivi Fun Cards</string>
     <string name="your_turn">⭐ YOUR TURN!</string>
     <string name="waiting_turn">%1$s\'s turn</string>
     <string name="loading">⏳ Loading…</string>
