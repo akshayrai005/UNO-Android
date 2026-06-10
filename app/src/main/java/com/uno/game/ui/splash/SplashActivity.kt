@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.uno.game.R
 import com.uno.game.ui.home.HomeActivity
 
@@ -14,6 +15,10 @@ import com.uno.game.ui.home.HomeActivity
 class SplashActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // MUST be called before super.onCreate() to handle Android 12+ splash screen
+        // This instantly replaces the round icon with our full baby photo
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
 
         // True full-screen — hide status bar and nav bar
