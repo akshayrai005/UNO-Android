@@ -27,19 +27,18 @@ class GameViewModel : ViewModel() {
     var roomCode: String = ""
 
     fun initSocket() {
-        // Make sure socket is connected
         if (!SocketManager.isConnected()) {
             SocketManager.connect()
         }
 
         SocketManager.onGameStarted = { state ->
-            Log.d("GameViewModel", "game_started received, players=${state.players.size}")
+            Log.d("GameViewModel", "game_started — players=${state.players.size}")
             _gameState.postValue(state)
         }
         SocketManager.onGameState = { state ->
-            Log.d("GameViewModel", "game_state update, currentPlayer=${state.currentPlayerId}")
+            Log.d("GameViewModel", "game_state — currentPlayer=${state.currentPlayerId}")
             _gameState.postValue(state)
-            state.winner?.let { _winnerEvent.postValue(it) }
+            state.winner?.takeIf { it.isNotBlank() }?.let { _winnerEvent.postValue(it) }
         }
         SocketManager.onUnoCalled = { playerId ->
             _unoEvent.postValue(playerId)
@@ -49,29 +48,23 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    fun playCard(cardId: String, chosenColor: String? = null) {
+    fun playCard(cardId: String, chosenColor: String? = null) =
         SocketManager.playCard(roomCode, currentPlayerId, cardId, chosenColor)
-    }
 
-    fun drawCard() {
+    fun drawCard() =
         SocketManager.drawCard(roomCode, currentPlayerId)
-    }
 
-    fun sayUno() {
+    fun sayUno() =
         SocketManager.sayUno(roomCode, currentPlayerId)
-    }
 
-    fun challengeUno(targetId: String) {
+    fun challengeUno(targetId: String) =
         SocketManager.challengeUno(roomCode, currentPlayerId, targetId)
-    }
 
-    fun isMyTurn(): Boolean {
-        val state = _gameState.value ?: return false
-        return state.currentPlayerId == currentPlayerId
-    }
+    fun isMyTurn(): Boolean =
+        _gameState.value?.currentPlayerId == currentPlayerId
 
-    fun getMyHand() = _gameState.value?.players
-        ?.find { it.id == currentPlayerId }?.hand ?: emptyList()
+    fun getMyHand() =
+        _gameState.value?.players?.find { it.id == currentPlayerId }?.hand ?: emptyList()
 
     fun getOtherPlayers(): List<Player> =
         _gameState.value?.players?.filter { it.id != currentPlayerId } ?: emptyList()

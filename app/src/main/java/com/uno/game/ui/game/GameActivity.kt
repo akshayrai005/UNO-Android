@@ -1,31 +1,46 @@
 package com.uno.game.ui.game
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
+import android.view.animation.OvershootInterpolator
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.uno.game.R
 import com.uno.game.audio.SoundManager
 import com.uno.game.databinding.ActivityGameBinding
+import com.uno.game.databinding.DialogColorPickerBinding
+import com.uno.game.databinding.DialogWinnerBinding
+import com.uno.game.models.GameState
 import com.uno.game.models.UnoCard
 import com.uno.game.utils.PreferencesManager
 
 class GameActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivityGameBinding
     private val viewModel: GameViewModel by viewModels()
     private lateinit var handAdapter: CardHandAdapter
     private lateinit var playerListAdapter: PlayerListAdapter
+
     private var pendingWildCard: UnoCard? = null
+    private var lastTopCardId: String? = null
+    private var isMuted = false
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
         private const val TAG = "GameActivity"
     }
 
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityGameBinding.inflate(layoutInflater)
@@ -42,38 +57,40 @@ class GameActivity : AppCompatActivity() {
         viewModel.currentUsername = username
         viewModel.initSocket()
 
+        SoundManager.init(this)
         setupRecyclerViews()
         setupButtons()
         observeGame()
 
-        SoundManager.init(this)
-
-        // Show waiting state initially
-        binding.tvTurnIndicator.text = "⏳ Loading game..."
-        binding.tvTurnIndicator.setBackgroundColor(Color.parseColor("#22FFFFFF"))
-        binding.tvTurnIndicator.setTextColor(Color.WHITE)
+        // Initial loading state
+        setTurnIndicator(null, false)
     }
 
+    // ── RecyclerViews ─────────────────────────────────────────────────────────
     private fun setupRecyclerViews() {
-        // Hand - horizontal scrollable
         handAdapter = CardHandAdapter { card -> onCardClicked(card) }
         binding.rvHand.apply {
-            layoutManager = LinearLayoutManager(this@GameActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = LinearLayoutManager(
+                this@GameActivity, LinearLayoutManager.HORIZONTAL, false
+            )
             adapter = handAdapter
             setHasFixedSize(false)
+            itemAnimator = null   // custom animations handled per-item
         }
 
-        // Other players - horizontal at top
         playerListAdapter = PlayerListAdapter { player ->
             viewModel.challengeUno(player.id)
-            Toast.makeText(this, "Challenged ${player.username}!", Toast.LENGTH_SHORT).show()
+            showToast("Challenged ${player.username}!")
         }
         binding.rvPlayers.apply {
-            layoutManager = LinearLayoutManager(this@GameActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = LinearLayoutManager(
+                this@GameActivity, LinearLayoutManager.HORIZONTAL, false
+            )
             adapter = playerListAdapter
         }
     }
 
+    // ── Buttons ───────────────────────────────────────────────────────────────
     private fun setupButtons() {
         binding.btnDrawPile.setOnClickListener { drawCard() }
         binding.btnDraw.setOnClickListener { drawCard() }
@@ -81,169 +98,325 @@ class GameActivity : AppCompatActivity() {
         binding.btnUno.setOnClickListener {
             viewModel.sayUno()
             SoundManager.playUno()
-            binding.btnUno.animate().scaleX(1.3f).scaleY(1.3f).setDuration(150)
-                .withEndAction { binding.btnUno.animate().scaleX(1f).scaleY(1f).duration = 150 }
+            animatePulseButton(binding.btnUno)
         }
 
         binding.btnMuteSound.setOnClickListener {
-            val muted = SoundManager.toggleMute()
-            binding.btnMuteSound.alpha = if (muted) 0.5f else 1.0f
+            isMuted = SoundManager.toggleMute()
+            binding.btnMuteSound.setImageResource(
+                if (isMuted) R.drawable.ic_sound_off else R.drawable.ic_sound_on
+            )
         }
     }
 
+    // ── Draw card logic ───────────────────────────────────────────────────────
     private fun drawCard() {
         val state = viewModel.gameState.value
-        if (state == null) {
-            Toast.makeText(this, "Game not loaded yet...", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (state == null) { showToast(getString(R.string.game_not_loaded)); return }
         if (!viewModel.isMyTurn()) {
-            val currentName = state.players.find { it.id == state.currentPlayerId }?.username ?: "someone"
-            Toast.makeText(this, "Wait for $currentName's turn!", Toast.LENGTH_SHORT).show()
+            val name = state.players.find { it.id == state.currentPlayerId }?.username ?: "someone"
+            showToast(getString(R.string.not_your_turn, name))
+            shakeView(binding.btnDraw)
             return
         }
         viewModel.drawCard()
         SoundManager.playCardDraw()
+        animatePileDrawPulse()
     }
 
+    // ── Card click ────────────────────────────────────────────────────────────
     private fun onCardClicked(card: UnoCard) {
         val state = viewModel.gameState.value
-        if (state == null) {
-            Toast.makeText(this, "Game not loaded yet...", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (state == null) { showToast(getString(R.string.game_not_loaded)); return }
         if (!viewModel.isMyTurn()) {
-            val currentName = state.players.find { it.id == state.currentPlayerId }?.username ?: "someone"
-            Toast.makeText(this, "Wait for $currentName's turn!", Toast.LENGTH_SHORT).show()
+            val name = state.players.find { it.id == state.currentPlayerId }?.username ?: "someone"
+            showToast(getString(R.string.not_your_turn, name))
             return
         }
         if (card.isWild()) {
             pendingWildCard = card
             showColorPicker()
         } else {
-            viewModel.playCard(card.id)
-            SoundManager.playCardPlay()
+            playCardWithAnimation(card.id)
         }
     }
 
-    private fun showColorPicker() {
-        val colors = arrayOf("🔴 Red", "🟢 Green", "🔵 Blue", "🟡 Yellow")
-        val colorValues = arrayOf("red", "green", "blue", "yellow")
-        AlertDialog.Builder(this)
-            .setTitle("Choose Color")
-            .setItems(colors) { _, which ->
-                pendingWildCard?.let { card ->
-                    viewModel.playCard(card.id, colorValues[which])
-                    SoundManager.playCardPlay()
-                    pendingWildCard = null
-                }
-            }
-            .setCancelable(true)
-            .show()
+    private fun playCardWithAnimation(cardId: String, chosenColor: String? = null) {
+        viewModel.playCard(cardId, chosenColor)
+        SoundManager.playCardPlay()
     }
 
+    // ── Dialogs ───────────────────────────────────────────────────────────────
+    private fun showColorPicker() {
+        val dialogBinding = DialogColorPickerBinding.inflate(LayoutInflater.from(this))
+        val dialog = AlertDialog.Builder(this, R.style.Theme_UNO)
+            .setView(dialogBinding.root)
+            .setCancelable(true)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val pick = { color: String ->
+            pendingWildCard?.let { card ->
+                playCardWithAnimation(card.id, color)
+                pendingWildCard = null
+            }
+            dialog.dismiss()
+        }
+
+        dialogBinding.btnColorRed.setOnClickListener    { pick("red") }
+        dialogBinding.btnColorGreen.setOnClickListener  { pick("green") }
+        dialogBinding.btnColorBlue.setOnClickListener   { pick("blue") }
+        dialogBinding.btnColorYellow.setOnClickListener { pick("yellow") }
+        dialog.show()
+    }
+
+    private fun showWinnerDialog(winnerId: String, state: GameState) {
+        val name = state.players.find { it.id == winnerId }?.username ?: "Unknown"
+        SoundManager.playWin()
+
+        val dialogBinding = DialogWinnerBinding.inflate(LayoutInflater.from(this))
+        dialogBinding.tvWinnerName.text = "$name WINS! 🏆"
+
+        val dialog = AlertDialog.Builder(this, R.style.Theme_UNO)
+            .setView(dialogBinding.root)
+            .setCancelable(false)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogBinding.btnBackToMenu.setOnClickListener {
+            dialog.dismiss()
+            finish()
+        }
+
+        dialog.show()
+        // Bounce dialog in
+        dialog.window?.decorView?.startAnimation(
+            android.view.animation.AnimationUtils.loadAnimation(this, R.anim.bounce_in)
+        )
+    }
+
+    // ── Game state observer ───────────────────────────────────────────────────
     private fun observeGame() {
         viewModel.gameState.observe(this) { state ->
-            Log.d(TAG, "gameState update — currentPlayerId=${state.currentPlayerId}, myId=${viewModel.currentPlayerId}, players=${state.players.size}")
+            Log.d(TAG, "gameState update — currentPlayerId=${state.currentPlayerId}")
 
-            // Top card
-            state.topCard?.let { card ->
-                binding.cardTop.setCard(card)
-                binding.cardTop.visibility = View.VISIBLE
-            }
-
-            // Current color indicator
-            binding.tvCurrentColor.setBackgroundColor(
-                when (state.currentColor) {
-                    "red"    -> Color.parseColor("#E53935")
-                    "green"  -> Color.parseColor("#43A047")
-                    "blue"   -> Color.parseColor("#1E88E5")
-                    "yellow" -> Color.parseColor("#FDD835")
-                    else     -> Color.GRAY
-                }
-            )
-
-            // Deck count & direction
-            binding.tvDeckCountText.text = "Deck: ${state.deckCount}"
-            binding.tvDirection.text = if (state.direction == 1) "→ Clockwise" else "← Counter"
-
-            // ---- MY HAND ----
-            // Try matching by ID first, fallback to username
+            // Resolve my player (by id or fallback to username)
             var myPlayer = state.players.find { it.id == viewModel.currentPlayerId }
             if (myPlayer == null && viewModel.currentUsername.isNotBlank()) {
                 myPlayer = state.players.find { it.username == viewModel.currentUsername }
-                // If found by username, update our playerId to match the server's
                 myPlayer?.let {
-                    Log.w(TAG, "ID mismatch — matched by username. Updating playerId to ${it.id}")
+                    Log.w(TAG, "ID mismatch — matched by username, updating id to ${it.id}")
                     viewModel.currentPlayerId = it.id
                     PreferencesManager.savePlayer(this, it.id, it.username)
                 }
             }
 
-            val myHand = myPlayer?.hand ?: emptyList()
-            Log.d(TAG, "My hand size: ${myHand.size} (myPlayer=${myPlayer?.username ?: "NOT FOUND"})")
-            handAdapter.submitList(myHand.toList()) // force new list reference
+            // ── Top card ──
+            state.topCard?.let { card ->
+                val isNewCard = card.id != lastTopCardId
+                binding.cardTop.setCard(card)
+                binding.cardTop.visibility = View.VISIBLE
+                if (isNewCard) {
+                    lastTopCardId = card.id
+                    animateDiscardIn()
+                    playSoundForCard(card)
+                }
+            }
 
-            // ---- OTHER PLAYERS ----
+            // ── Current color dot ──
+            binding.tvCurrentColor.setBackgroundColor(colorForString(state.currentColor))
+
+            // ── Deck count ──
+            binding.tvDeckCountText.text = getString(R.string.deck_label, state.deckCount)
+            binding.tvDeckCountPile.text = "${state.deckCount}"
+
+            // ── Direction ──
+            binding.tvDirection.text = if (state.direction == 1) "↻" else "↺"
+
+            // ── My hand ──
+            val myHand = myPlayer?.hand ?: emptyList()
+            val topCard = state.topCard
+            val currentColor = state.currentColor
+
+            // Compute which cards are playable
+            val playableIds = if (viewModel.isMyTurn() && topCard != null) {
+                myHand.filter { card ->
+                    isCardPlayable(card, topCard, currentColor, state.pendingDraw)
+                }.map { it.id }.toSet()
+            } else {
+                emptySet()
+            }
+
+            handAdapter.playableCardIds = playableIds
+            handAdapter.submitList(myHand.toList())
+
+            // ── Other players ──
             val others = state.players.filter { it.id != viewModel.currentPlayerId }
+            playerListAdapter.activePlayerId = state.currentPlayerId
             playerListAdapter.submitList(others)
 
-            // ---- TURN INDICATOR ----
+            // ── Turn indicator ──
             val isMyTurn = state.currentPlayerId == viewModel.currentPlayerId
-            if (state.currentPlayerId.isNullOrBlank()) {
-                binding.tvTurnIndicator.text = "⏳ Loading..."
-            } else if (isMyTurn) {
-                binding.tvTurnIndicator.text = "⭐ YOUR TURN!"
-            } else {
-                val currentName = state.players.find { it.id == state.currentPlayerId }?.username ?: "..."
-                binding.tvTurnIndicator.text = "🎮 $currentName's turn"
-            }
-            binding.tvTurnIndicator.setBackgroundColor(
-                if (isMyTurn) Color.parseColor("#33FFD700") else Color.parseColor("#22FFFFFF")
-            )
-            binding.tvTurnIndicator.setTextColor(
-                if (isMyTurn) Color.parseColor("#FFD700") else Color.WHITE
-            )
+            val currentName = state.players.find { it.id == state.currentPlayerId }?.username
+            setTurnIndicator(currentName, isMyTurn)
 
-            // Only enable draw if it's my turn
+            // ── Draw button ──
             binding.btnDraw.isEnabled = isMyTurn
             binding.btnDrawPile.isEnabled = isMyTurn
-
-            // Pending draw warning
             if (state.pendingDraw > 0) {
-                binding.btnDraw.text = "Draw ${state.pendingDraw} ⚠️"
-                binding.btnDraw.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
+                binding.btnDraw.text = getString(R.string.draw_penalty, state.pendingDraw)
+                binding.btnDraw.backgroundTintList =
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
+                binding.tvPendingDraw.text = "⚠️ Must draw ${state.pendingDraw}"
+                binding.tvPendingDraw.visibility = View.VISIBLE
             } else {
-                binding.btnDraw.text = "Draw Card"
-                binding.btnDraw.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1E88E5"))
+                binding.btnDraw.text = getString(R.string.draw_card)
+                binding.btnDraw.backgroundTintList =
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#1E88E5"))
+                binding.tvPendingDraw.visibility = View.GONE
             }
 
-            // UNO button — only show when I have exactly 1 card
+            // ── UNO button ──
             binding.btnUno.visibility = if (myHand.size == 1) View.VISIBLE else View.GONE
+
+            // ── Last event toast ──
+            state.lastEvent?.let { event ->
+                when {
+                    event.unoAlert == true -> showEventToast("UNO! 🃏")
+                    event.card?.value == "skip"       -> showEventToast("⊘ SKIP!")
+                    event.card?.value == "reverse"    -> showEventToast("⇄ REVERSE!")
+                    event.card?.value == "draw2"      -> showEventToast("+2 Draw!")
+                    event.card?.value == "wild_draw4" -> showEventToast("+4 Draw!")
+                }
+            }
         }
 
         viewModel.unoEvent.observe(this) { playerId ->
             val name = viewModel.gameState.value?.players?.find { it.id == playerId }?.username ?: "Someone"
-            Toast.makeText(this, "🃏 $name said UNO!", Toast.LENGTH_SHORT).show()
+            showEventToast("$name: UNO! 🃏")
             SoundManager.playUno()
         }
 
         viewModel.winnerEvent.observe(this) { winnerId ->
-            val name = viewModel.gameState.value?.players?.find { it.id == winnerId }?.username ?: "Unknown"
-            SoundManager.playWin()
-            AlertDialog.Builder(this)
-                .setTitle("🎉 Game Over!")
-                .setMessage("$name wins! 🏆")
-                .setPositiveButton("Back to Menu") { _, _ -> finish() }
-                .setCancelable(false)
-                .show()
+            viewModel.gameState.value?.let { state ->
+                showWinnerDialog(winnerId, state)
+            }
         }
 
         viewModel.errorMessage.observe(this) { msg ->
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            showToast(msg)
         }
     }
 
+    // ── Card playability check (client-side for UX only — server is authoritative) ──
+    private fun isCardPlayable(
+        card: UnoCard,
+        topCard: UnoCard,
+        currentColor: String?,
+        pendingDraw: Int
+    ): Boolean {
+        if (card.isWild()) return pendingDraw == 0 || card.value == "wild_draw4"
+        if (pendingDraw > 0) {
+            // Only draw2/draw4 can stack (or must draw)
+            return card.value == "draw2" && topCard.value == "draw2"
+        }
+        val matchesColor = card.color == (currentColor ?: topCard.color)
+        val matchesValue = card.value == topCard.value
+        return matchesColor || matchesValue
+    }
+
+    // ── Turn indicator ────────────────────────────────────────────────────────
+    private fun setTurnIndicator(currentName: String?, isMyTurn: Boolean) {
+        when {
+            currentName == null -> {
+                binding.tvTurnIndicator.text = "⏳ Loading…"
+                binding.tvTurnIndicator.setTextColor(Color.parseColor("#80FFFFFF"))
+                binding.tvTurnIndicator.setBackgroundResource(R.drawable.bg_turn_indicator_other)
+            }
+            isMyTurn -> {
+                binding.tvTurnIndicator.text = "⭐ YOUR TURN!"
+                binding.tvTurnIndicator.setTextColor(Color.parseColor("#FFD700"))
+                binding.tvTurnIndicator.setBackgroundResource(R.drawable.bg_turn_indicator)
+                // Subtle scale pop
+                animateScalePop(binding.tvTurnIndicator)
+            }
+            else -> {
+                binding.tvTurnIndicator.text = "🎮 ${currentName}'s turn"
+                binding.tvTurnIndicator.setTextColor(Color.parseColor("#B0C4DE"))
+                binding.tvTurnIndicator.setBackgroundResource(R.drawable.bg_turn_indicator_other)
+            }
+        }
+    }
+
+    // ── Game event toast overlay ──────────────────────────────────────────────
+    private fun showEventToast(message: String) {
+        binding.tvEventToast.apply {
+            text = message
+            alpha = 0f
+            visibility = View.VISIBLE
+            animate().alpha(1f).setDuration(200).withEndAction {
+                postDelayed({
+                    animate().alpha(0f).setDuration(300).withEndAction {
+                        visibility = View.GONE
+                    }.start()
+                }, 1200)
+            }.start()
+        }
+    }
+
+    // ── Sounds per card ───────────────────────────────────────────────────────
+    private fun playSoundForCard(card: UnoCard) {
+        when (card.value) {
+            "skip"       -> SoundManager.playSkip()
+            "reverse"    -> SoundManager.playReverse()
+            "wild_draw4" -> SoundManager.playDraw4()
+            else         -> SoundManager.playCardPlay()
+        }
+    }
+
+    // ── Animations ────────────────────────────────────────────────────────────
+    private fun animateDiscardIn() {
+        binding.cardTop.apply {
+            scaleX = 0.7f; scaleY = 0.7f; alpha = 0.4f; rotation = (-15..15).random().toFloat()
+            animate().scaleX(1f).scaleY(1f).alpha(1f).rotation(0f)
+                .setDuration(280).setInterpolator(OvershootInterpolator(1.8f)).start()
+        }
+    }
+
+    private fun animatePileDrawPulse() {
+        animateScalePop(binding.btnDrawPile)
+    }
+
+    private fun animatePulseButton(view: View) {
+        view.animate().scaleX(1.25f).scaleY(1.25f).setDuration(120)
+            .withEndAction { view.animate().scaleX(1f).scaleY(1f).duration = 120 }.start()
+    }
+
+    private fun animateScalePop(view: View) {
+        val sx = ObjectAnimator.ofFloat(view, "scaleX", 1f, 1.05f, 1f)
+        val sy = ObjectAnimator.ofFloat(view, "scaleY", 1f, 1.05f, 1f)
+        AnimatorSet().apply { playTogether(sx, sy); duration = 200; start() }
+    }
+
+    private fun shakeView(view: View) {
+        ObjectAnimator.ofFloat(view, "translationX",
+            0f, -14f, 14f, -10f, 10f, -5f, 5f, 0f).apply { duration = 350; start() }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private fun colorForString(color: String?): Int = when (color) {
+        "red"    -> Color.parseColor("#E53935")
+        "green"  -> Color.parseColor("#43A047")
+        "blue"   -> Color.parseColor("#1E88E5")
+        "yellow" -> Color.parseColor("#FDD835")
+        else     -> Color.GRAY
+    }
+
+    private fun showToast(msg: String) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
     override fun onDestroy() {
         super.onDestroy()
         SoundManager.release()
