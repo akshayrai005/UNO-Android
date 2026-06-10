@@ -198,7 +198,7 @@
             android:layout_weight="1"
             android:textColor="@color/white_50"
             android:textSize="@dimen/text_sm"
-            android:text="@string/deck_label" />
+            android:text="@string/loading" />
 
         <TextView
             android:id="@+id/tvPendingDraw"

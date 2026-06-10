@@ -222,6 +222,13 @@ object SocketManager {
         }
     }
 
+
+    fun requestGameState(roomCode: String) {
+        emit("get_game_state", JSONObject().apply {
+            put("roomCode", roomCode)
+        })
+    }
+
     fun getSocketId(): String? = socket?.id()
 
     fun disconnect() {

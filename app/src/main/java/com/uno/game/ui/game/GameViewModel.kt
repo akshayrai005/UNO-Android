@@ -32,11 +32,11 @@ class GameViewModel : ViewModel() {
         }
 
         SocketManager.onGameStarted = { state ->
-            Log.d("GameViewModel", "game_started — players=${state.players.size}")
+            Log.d("GameViewModel", "game_started --- players=\${state.players.size}")
             _gameState.postValue(state)
         }
         SocketManager.onGameState = { state ->
-            Log.d("GameViewModel", "game_state — currentPlayer=${state.currentPlayerId}")
+            Log.d("GameViewModel", "game_state --- currentPlayer=\${state.currentPlayerId}")
             _gameState.postValue(state)
             state.winner?.takeIf { it.isNotBlank() }?.let { _winnerEvent.postValue(it) }
         }
@@ -46,6 +46,10 @@ class GameViewModel : ViewModel() {
         SocketManager.onError = { msg ->
             _errorMessage.postValue(msg)
         }
+
+        // Request current game state immediately — game_started may have already
+        // fired in LobbyActivity before this screen existed.
+        SocketManager.requestGameState(roomCode)
     }
 
     fun playCard(cardId: String, chosenColor: String? = null) =

@@ -62,6 +62,10 @@ class GameActivity : AppCompatActivity() {
         setupButtons()
         observeGame()
 
+        // Disable draw/UNO until first game state arrives
+        binding.btnDraw.isEnabled = false
+        binding.btnDrawPile.isEnabled = false
+
         // Initial loading state
         setTurnIndicator(null, false)
     }
