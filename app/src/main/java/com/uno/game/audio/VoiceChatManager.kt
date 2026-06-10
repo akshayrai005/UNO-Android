@@ -1,19 +1,14 @@
 package com.uno.game.audio
 
 import android.content.Context
+import android.media.AudioManager
 import android.util.Log
 import com.uno.game.network.SocketManager
 import org.webrtc.*
 
 /**
  * WebRTC voice chat — full mesh, one PeerConnection per remote player.
- *
- * Flow:
- * 1. Call initialize() → joins the socket voice room, starts local audio capture.
- * 2. When a peer joins  → we create an offer and send it via Socket.IO.
- * 3. When we receive an offer → we create an answer and send it back.
- * 4. ICE candidates are exchanged until media flows peer-to-peer.
- * 5. Call release() on Activity.onDestroy().
+ * Audio is routed through STREAM_VOICE_CALL at max volume for best clarity.
  */
 class VoiceChatManager(
     private val context: Context,
@@ -21,46 +16,75 @@ class VoiceChatManager(
 ) {
     private val TAG = "VoiceChat"
 
-    // WebRTC core
     private var factory: PeerConnectionFactory? = null
     private var localAudioSource: AudioSource? = null
     private var localAudioTrack: AudioTrack? = null
-    private val peers = mutableMapOf<String, PeerConnection>() // socketId → PeerConnection
+    private val peers = mutableMapOf<String, PeerConnection>()
     private val pendingCandidates = mutableMapOf<String, MutableList<IceCandidate>>()
 
     private var isMuted = false
     private var isInitialized = false
 
-    // STUN/TURN servers — free STUN is fine for LAN/family use
+    // AudioManager for volume + mode control
+    private var audioManager: AudioManager? = null
+    private var savedAudioMode = AudioManager.MODE_NORMAL
+    private var savedSpeakerOn = false
+
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer()
     )
 
-    // ── Init ─────────────────────────────────────────────────────────────────
+    // ── Init ──────────────────────────────────────────────────────────────────
 
     fun initialize() {
         if (isInitialized) return
         Log.d(TAG, "Initializing WebRTC voice for room $roomCode")
 
-        // Init PeerConnectionFactory
+        // ── Fix low volume: set audio mode + max volume ───────────────────────
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager?.let { am ->
+            savedAudioMode = am.mode
+            savedSpeakerOn = am.isSpeakerphoneOn
+
+            // MODE_IN_COMMUNICATION is required for WebRTC voice — uses VoIP path
+            am.mode = AudioManager.MODE_IN_COMMUNICATION
+
+            // Loudspeaker ON so everyone around the phone can hear
+            am.isSpeakerphoneOn = true
+
+            // Crank STREAM_VOICE_CALL to maximum
+            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+            am.setStreamVolume(
+                AudioManager.STREAM_VOICE_CALL,
+                maxVol,
+                0 // no UI flag — silent change
+            )
+            Log.d(TAG, "AudioManager: mode=IN_COMMUNICATION, speakerOn=true, vol=$maxVol/$maxVol")
+        }
+
+        // ── WebRTC factory ────────────────────────────────────────────────────
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
                 .setEnableInternalTracer(false)
                 .createInitializationOptions()
         )
 
-        val options = PeerConnectionFactory.Options()
         factory = PeerConnectionFactory.builder()
-            .setOptions(options)
+            .setOptions(PeerConnectionFactory.Options())
             .createPeerConnectionFactory()
 
-        // Create local audio track
+        // ── Local audio track with all quality enhancements ───────────────────
         val audioConstraints = MediaConstraints().apply {
-            mandatory.add(MediaConstraints.KeyValuePair("googEchoCancellation", "true"))
-            mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression", "true"))
-            mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googEchoCancellation",     "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression",     "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl",      "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googHighpassFilter",       "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googAudioMirroring",       "false"))
+            // Boost mic gain
+            optional.add(MediaConstraints.KeyValuePair("googDAEchoCancellation",   "true"))
+            optional.add(MediaConstraints.KeyValuePair("googTypingNoiseDetection",  "true"))
         }
         localAudioSource = factory?.createAudioSource(audioConstraints)
         localAudioTrack  = factory?.createAudioTrack("ARDAMSa0", localAudioSource)
@@ -72,7 +96,7 @@ class VoiceChatManager(
         Log.d(TAG, "WebRTC initialized — waiting for peers")
     }
 
-    // ── Socket signaling hooks ────────────────────────────────────────────────
+    // ── Socket signaling ──────────────────────────────────────────────────────
 
     private fun hookSocketEvents() {
         SocketManager.onVoicePeerJoined = { socketId ->
@@ -95,10 +119,8 @@ class VoiceChatManager(
                 offerObj.toString().extractSdp()
             )
             pc.setRemoteDescription(SimpleSdpObserver("setRemote-offer"), sdp)
-            // drain pending ICE
             pendingCandidates[fromSocketId]?.forEach { pc.addIceCandidate(it) }
             pendingCandidates.remove(fromSocketId)
-            // create answer
             val answerConstraints = MediaConstraints().apply {
                 mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
                 mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
@@ -126,19 +148,17 @@ class VoiceChatManager(
         }
 
         SocketManager.onVoiceIceCandidate = { fromSocketId, candidateObj ->
-            val candidateStr = candidateObj.toString()
-            val candidate = parseIceCandidate(candidateStr)
+            val candidate = parseIceCandidate(candidateObj.toString())
             val pc = peers[fromSocketId]
             if (pc != null) {
                 pc.addIceCandidate(candidate)
             } else {
-                // buffer until PeerConnection is ready
                 pendingCandidates.getOrPut(fromSocketId) { mutableListOf() }.add(candidate)
             }
         }
     }
 
-    // ── PeerConnection creation ───────────────────────────────────────────────
+    // ── PeerConnection ────────────────────────────────────────────────────────
 
     private fun createPeerConnection(socketId: String, isOfferer: Boolean): PeerConnection {
         peers[socketId]?.dispose()
@@ -154,7 +174,13 @@ class VoiceChatManager(
             }
             override fun onTrack(transceiver: RtpTransceiver) {
                 Log.d(TAG, "Remote track received from $socketId")
-                // Audio plays automatically — no video to handle
+                // Set remote track volume to max (1.0 = 100%)
+                transceiver.receiver.track()?.let { track ->
+                    if (track is AudioTrack) {
+                        track.setVolume(10.0) // WebRTC AudioTrack volume: 0.0-10.0
+                        Log.d(TAG, "Remote audio track volume set to 10.0 (max)")
+                    }
+                }
             }
             override fun onConnectionChange(state: PeerConnection.PeerConnectionState) {
                 Log.d(TAG, "PeerConnection[$socketId] state: $state")
@@ -167,14 +193,18 @@ class VoiceChatManager(
             override fun onRemoveStream(stream: MediaStream) {}
             override fun onDataChannel(dc: DataChannel) {}
             override fun onRenegotiationNeeded() {}
-            override fun onAddTrack(r: RtpReceiver, streams: Array<MediaStream>) {}
+            override fun onAddTrack(r: RtpReceiver, streams: Array<MediaStream>) {
+                // Also set volume here for older WebRTC builds
+                r.track()?.let { track ->
+                    if (track is AudioTrack) {
+                        track.setVolume(10.0)
+                    }
+                }
+            }
             override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) {}
         })!!
 
-        // Add local audio track
-        val streamId = "ARDAMSv0"
-        pc.addTrack(localAudioTrack!!, listOf(streamId))
-
+        pc.addTrack(localAudioTrack!!, listOf("ARDAMSv0"))
         peers[socketId] = pc
 
         if (isOfferer) {
@@ -193,12 +223,12 @@ class VoiceChatManager(
         return pc
     }
 
-    // ── Controls ─────────────────────────────────────────────────────────────
+    // ── Controls ──────────────────────────────────────────────────────────────
 
     fun toggleMute(): Boolean {
         isMuted = !isMuted
         localAudioTrack?.setEnabled(!isMuted)
-        Log.d(TAG, "Mute: $isMuted")
+        Log.d(TAG, "Mic muted: $isMuted")
         return isMuted
     }
 
@@ -207,34 +237,41 @@ class VoiceChatManager(
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
     fun release() {
+        // Restore audio state
+        audioManager?.let { am ->
+            am.mode = savedAudioMode
+            am.isSpeakerphoneOn = savedSpeakerOn
+        }
+        audioManager = null
+
         SocketManager.leaveVoice(roomCode)
-        SocketManager.onVoicePeerJoined    = null
-        SocketManager.onVoicePeerLeft      = null
-        SocketManager.onVoiceOffer         = null
-        SocketManager.onVoiceAnswer        = null
-        SocketManager.onVoiceIceCandidate  = null
+        SocketManager.onVoicePeerJoined   = null
+        SocketManager.onVoicePeerLeft     = null
+        SocketManager.onVoiceOffer        = null
+        SocketManager.onVoiceAnswer       = null
+        SocketManager.onVoiceIceCandidate = null
+
         peers.values.forEach { it.dispose() }
         peers.clear()
         pendingCandidates.clear()
+
         localAudioTrack?.dispose()
         localAudioSource?.dispose()
         factory?.dispose()
-        factory         = null
-        localAudioTrack = null
+        factory          = null
+        localAudioTrack  = null
         localAudioSource = null
-        isInitialized   = false
+        isInitialized    = false
         Log.d(TAG, "VoiceChatManager released")
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Pull "sdp" field out of a JSON-like string e.g. {"type":"offer","sdp":"v=0\r\n..."} */
     private fun String.extractSdp(): String {
         return try {
-            val obj = org.json.JSONObject(this)
-            obj.getString("sdp")
+            org.json.JSONObject(this).getString("sdp")
         } catch (e: Exception) {
-            this // already raw SDP
+            this
         }
     }
 
@@ -261,7 +298,6 @@ class VoiceChatManager(
     }
 }
 
-/** Minimal SdpObserver that only logs errors — override onCreateSuccess where needed. */
 open class SimpleSdpObserver(private val tag: String) : SdpObserver {
     override fun onCreateSuccess(sdp: SessionDescription) {}
     override fun onSetSuccess() {}
