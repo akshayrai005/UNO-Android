@@ -11,29 +11,26 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="🎉"
-        android:textSize="64sp"
-        android:layout_marginBottom="8dp" />
+        android:textSize="56sp"
+        android:layout_marginBottom="4dp" />
 
     <TextView
-        android:id="@+id/tvWinnerTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="GAME OVER"
-        android:textSize="24sp"
+        android:textSize="22sp"
         android:textStyle="bold"
         android:textColor="@color/turn_gold"
         android:letterSpacing="0.12"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginBottom="16dp" />
 
-    <TextView
-        android:id="@+id/tvWinnerName"
-        android:layout_width="wrap_content"
+    <!-- Rankings list -->
+    <LinearLayout
+        android:id="@+id/layoutRankings"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Player WINS!"
-        android:textSize="18sp"
-        android:textColor="@color/white_90"
-        android:gravity="center"
-        android:layout_marginBottom="28dp" />
+        android:orientation="vertical"
+        android:layout_marginBottom="20dp" />
 
     <Button
         android:id="@+id/btnBackToMenu"
@@ -43,7 +40,6 @@
         android:backgroundTint="@color/uno_red"
         android:textColor="@color/white"
         android:textStyle="bold"
-        android:layout_marginBottom="10dp"
         style="@style/Button.UNO" />
 
 </LinearLayout>

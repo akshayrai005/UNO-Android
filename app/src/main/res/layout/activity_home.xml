@@ -164,6 +164,19 @@
                         android:inputType="textCapCharacters" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- Rejoin last room -->
+                <Button
+                    android:id="@+id/btnRejoinRoom"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/button_height"
+                    android:text="↩️ REJOIN LAST ROOM"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:backgroundTint="@color/wild_purple"
+                    android:visibility="gone"
+                    android:layout_marginBottom="10dp"
+                    style="@style/Button.UNO" />
+
                 <!-- Join Room -->
                 <Button
                     android:id="@+id/btnJoinRoom"

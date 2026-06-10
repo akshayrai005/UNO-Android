@@ -60,6 +60,7 @@ data class GameState(
     val topCard: UnoCard?,
     val deckCount: Int,
     val winner: String?,
+    val finishOrder: List<String> = emptyList(),
     val players: List<Player>,
     val lastEvent: LastEvent? = null
 )

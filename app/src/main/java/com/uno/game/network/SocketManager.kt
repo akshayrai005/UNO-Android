@@ -20,6 +20,7 @@ object SocketManager {
     var onUnoCalled: ((String) -> Unit)? = null
     var onUnoChallenge: ((JSONObject) -> Unit)? = null
     var onPlayerDisconnected: ((String) -> Unit)? = null
+    var onPlayerFinished: ((String, Int) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
     var onConnectionChange: ((Boolean) -> Unit)? = null
 
@@ -78,6 +79,10 @@ object SocketManager {
             }
             on("uno_challenge") { args ->
                 onUnoChallenge?.invoke(args[0] as JSONObject)
+            }
+            on("player_finished") { args ->
+                val obj = args[0] as JSONObject
+                onPlayerFinished?.invoke(obj.optString("playerId"), obj.optInt("position"))
             }
             on("player_disconnected") { args ->
                 val obj = args[0] as JSONObject

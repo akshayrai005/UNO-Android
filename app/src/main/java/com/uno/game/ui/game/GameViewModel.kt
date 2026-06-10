@@ -22,6 +22,9 @@ class GameViewModel : ViewModel() {
     private val _winnerEvent = MutableLiveData<String>()
     val winnerEvent: LiveData<String> = _winnerEvent
 
+    private val _playerFinishedEvent = MutableLiveData<Pair<String,Int>>()
+    val playerFinishedEvent: LiveData<Pair<String,Int>> = _playerFinishedEvent
+
     var currentPlayerId: String = ""
     var currentUsername: String = ""
     var roomCode: String = ""
@@ -42,6 +45,9 @@ class GameViewModel : ViewModel() {
         }
         SocketManager.onUnoCalled = { playerId ->
             _unoEvent.postValue(playerId)
+        }
+        SocketManager.onPlayerFinished = { playerId, position ->
+            _playerFinishedEvent.postValue(Pair(playerId, position))
         }
         SocketManager.onError = { msg ->
             _errorMessage.postValue(msg)
@@ -78,6 +84,7 @@ class GameViewModel : ViewModel() {
         SocketManager.onGameStarted = null
         SocketManager.onGameState = null
         SocketManager.onUnoCalled = null
+        SocketManager.onPlayerFinished = null
         SocketManager.onError = null
     }
 }

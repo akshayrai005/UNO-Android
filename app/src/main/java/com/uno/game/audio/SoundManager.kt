@@ -14,10 +14,11 @@ object SoundManager {
     private var soundReverse  = 0
     private var soundSkip     = 0
     private var soundDraw4    = 0
+    private var soundShuffle  = 0
     private var isMuted = false
 
     fun init(context: Context) {
-        if (soundPool != null) return   // already initialised
+        if (soundPool != null) return
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -26,7 +27,6 @@ object SoundManager {
             .setMaxStreams(6)
             .setAudioAttributes(attrs)
             .build()
-
         soundPool!!.let { sp ->
             soundUno      = sp.load(context, R.raw.sound_uno,       1)
             soundCardPlay = sp.load(context, R.raw.sound_card_play, 1)
@@ -35,6 +35,7 @@ object SoundManager {
             soundReverse  = sp.load(context, R.raw.sound_reverse,   1)
             soundSkip     = sp.load(context, R.raw.sound_skip,      1)
             soundDraw4    = sp.load(context, R.raw.sound_draw4,     1)
+            soundShuffle  = sp.load(context, R.raw.sound_shuffle,   1)
         }
     }
 
@@ -45,22 +46,18 @@ object SoundManager {
     fun playReverse()  { play(soundReverse) }
     fun playSkip()     { play(soundSkip) }
     fun playDraw4()    { play(soundDraw4) }
+    fun playShuffle()  { play(soundShuffle) }
 
     private fun play(soundId: Int) {
-        if (!isMuted && soundId != 0) {
-            soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
-        }
+        if (!isMuted && soundId != 0) soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
     }
 
-    fun toggleMute(): Boolean {
-        isMuted = !isMuted
-        return isMuted
-    }
+    fun toggleMute(): Boolean { isMuted = !isMuted; return isMuted }
+    fun isMuted() = isMuted
 
     fun release() {
-        soundPool?.release()
-        soundPool = null
-        soundUno = 0; soundCardPlay = 0; soundCardDraw = 0
-        soundWin = 0; soundReverse  = 0; soundSkip     = 0; soundDraw4 = 0
+        soundPool?.release(); soundPool = null
+        soundUno=0; soundCardPlay=0; soundCardDraw=0; soundWin=0
+        soundReverse=0; soundSkip=0; soundDraw4=0; soundShuffle=0
     }
 }

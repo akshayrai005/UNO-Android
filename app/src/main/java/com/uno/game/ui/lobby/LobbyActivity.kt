@@ -40,6 +40,7 @@ class LobbyActivity : AppCompatActivity() {
         val username = PreferencesManager.getUsername(this) ?: run { finish(); return }
 
         binding.tvRoomCode.text = roomCode
+        PreferencesManager.saveLastRoom(this, roomCode)
 
         // Start button — only visible for host
         if (isHost) {

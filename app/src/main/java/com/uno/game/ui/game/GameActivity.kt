@@ -63,6 +63,8 @@ class GameActivity : AppCompatActivity() {
         SocketManager.joinRoom(roomCode, playerId, username)
 
         SoundManager.init(this)
+        SoundManager.playShuffle()   // satisfying shuffle on game entry
+        requestMicrophonePermission()
         setupRecyclerViews()
         setupButtons()
         observeGame()
@@ -180,11 +182,26 @@ class GameActivity : AppCompatActivity() {
     }
 
     private fun showWinnerDialog(winnerId: String, state: GameState) {
-        val name = state.players.find { it.id == winnerId }?.username ?: "Unknown"
         SoundManager.playWin()
 
         val dialogBinding = DialogWinnerBinding.inflate(LayoutInflater.from(this))
-        dialogBinding.tvWinnerName.text = "$name WINS! 🏆"
+
+        // Build rankings list
+        val medals = listOf("🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣")
+        val rankings = state.finishOrder.mapNotNull { id ->
+            state.players.find { it.id == id }?.username
+        }
+        val container = dialogBinding.layoutRankings
+        rankings.forEachIndexed { i, name ->
+            val tv = android.widget.TextView(this).apply {
+                text = "${medals.getOrElse(i) { "▪️" }} $name"
+                textSize = if (i == 0) 20f else 15f
+                setTextColor(if (i == 0) android.graphics.Color.parseColor("#FFD700") else android.graphics.Color.parseColor("#E0E0E0"))
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, if (i == 0) 0 else 4, 0, if (i == 0) 8 else 4)
+            }
+            container.addView(tv)
+        }
 
         val dialog = AlertDialog.Builder(this, R.style.Theme_UNO)
             .setView(dialogBinding.root)
@@ -193,12 +210,12 @@ class GameActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
         dialogBinding.btnBackToMenu.setOnClickListener {
+            PreferencesManager.clearLastRoom(this)
             dialog.dismiss()
             finish()
         }
 
         dialog.show()
-        // Bounce dialog in
         dialog.window?.decorView?.startAnimation(
             android.view.animation.AnimationUtils.loadAnimation(this, R.anim.bounce_in)
         )
@@ -320,6 +337,16 @@ class GameActivity : AppCompatActivity() {
         viewModel.winnerEvent.observe(this) { winnerId ->
             viewModel.gameState.value?.let { state ->
                 showWinnerDialog(winnerId, state)
+            }
+        }
+
+        viewModel.playerFinishedEvent.observe(this) { (playerId, position) ->
+            val medals = listOf("🥇","🥈","🥉","4th","5th","6th")
+            val name = viewModel.gameState.value?.players?.find { it.id == playerId }?.username ?: "Someone"
+            val medal = medals.getOrElse(position - 1) { "$position" }
+            showEventToast("$medal $name finished!")
+            if (playerId == viewModel.currentPlayerId) {
+                showToast("You finished $medal place! Game continues...")
             }
         }
 

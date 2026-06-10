@@ -35,6 +35,7 @@ class HomeActivity : AppCompatActivity() {
         savedUsername?.let { binding.etUsername.setText(it) }
 
         setupColorPicker()
+        setupRejoinButton()
 
         binding.btnCreateRoom.setOnClickListener {
             val username = binding.etUsername.text.toString().trim()
@@ -72,6 +73,24 @@ class HomeActivity : AppCompatActivity() {
         }
         colorViews[0].scaleX = 1.3f; colorViews[0].scaleY = 1.3f; colorViews[0].alpha = 1f
         colorViews.drop(1).forEach { it.alpha = 0.6f }
+    }
+
+    private fun setupRejoinButton() {
+        val lastRoom = PreferencesManager.getLastRoom(this)
+        if (!lastRoom.isNullOrBlank()) {
+            binding.btnRejoinRoom.visibility = android.view.View.VISIBLE
+            binding.btnRejoinRoom.text = "↩️ REJOIN ROOM: $lastRoom"
+            binding.btnRejoinRoom.setOnClickListener {
+                val username = binding.etUsername.text.toString().trim()
+                if (username.isBlank()) {
+                    android.widget.Toast.makeText(this, "Enter your username first!", android.widget.Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                joinRoomFlow(username, lastRoom)
+            }
+        } else {
+            binding.btnRejoinRoom.visibility = android.view.View.GONE
+        }
     }
 
     private fun createRoomFlow(username: String) {
