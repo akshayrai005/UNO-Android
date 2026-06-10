@@ -1,27 +1,22 @@
 package com.uno.game.ui.lobby
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
-import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.uno.game.databinding.ActivityLobbyBinding
-import com.uno.game.network.ApiService
 import com.uno.game.network.SocketManager
 import com.uno.game.ui.game.GameActivity
 import com.uno.game.utils.PreferencesManager
-import kotlinx.coroutines.launch
-import org.json.JSONObject
 
 class LobbyActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLobbyBinding
     private lateinit var playerAdapter: LobbyPlayerAdapter
     private var roomCode: String = ""
     private var playerId: String = ""
-    private var hostId: String = ""
+    private var isHost: Boolean = false
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
@@ -34,30 +29,40 @@ class LobbyActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: return
-        val isHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
+        isHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
         playerId = PreferencesManager.getPlayerId(this) ?: return
         val username = PreferencesManager.getUsername(this) ?: return
 
         binding.tvRoomCode.text = "Room: $roomCode"
-        binding.btnStart.visibility = if (isHost) View.VISIBLE else View.GONE
+
+        // Show START button only for host, disabled until 2+ players
+        if (isHost) {
+            binding.btnStart.visibility = View.VISIBLE
+            binding.btnStart.isEnabled = false
+            binding.btnStart.alpha = 0.5f
+            binding.btnStart.text = "Waiting for players..."
+        } else {
+            binding.btnStart.visibility = View.GONE
+        }
 
         playerAdapter = LobbyPlayerAdapter()
-        binding.rvLobbyPlayers.apply {
-            layoutManager = LinearLayoutManager(this@LobbyActivity)
-            adapter = playerAdapter
-        }
+        binding.rvLobbyPlayers.adapter = playerAdapter
 
         setupSocket()
         SocketManager.joinRoom(roomCode, playerId, username)
 
         binding.btnStart.setOnClickListener {
-            SocketManager.startGame(roomCode, playerId)
+            if (isHost) {
+                SocketManager.startGame(roomCode, playerId)
+                binding.btnStart.isEnabled = false
+                binding.btnStart.text = "Starting..."
+            }
         }
 
         binding.btnCopyCode.setOnClickListener {
             val clipboard = getSystemService(android.content.ClipboardManager::class.java)
             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Room Code", roomCode))
-            Toast.makeText(this, "Room code copied!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "✅ Room code copied!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -76,20 +81,30 @@ class LobbyActivity : AppCompatActivity() {
                     ))
                 }
             }
-            hostId = json.optString("hostId")
             runOnUiThread {
                 playerAdapter.submitList(list)
                 binding.tvPlayerCount.text = "${list.size}/6 Players"
-                binding.btnStart.isEnabled = list.size >= 2
+
+                // Update START button state for host
+                if (isHost) {
+                    if (list.size >= 2) {
+                        binding.btnStart.isEnabled = true
+                        binding.btnStart.alpha = 1.0f
+                        binding.btnStart.text = "START GAME (${list.size} players)"
+                    } else {
+                        binding.btnStart.isEnabled = false
+                        binding.btnStart.alpha = 0.5f
+                        binding.btnStart.text = "Waiting for players..."
+                    }
+                }
             }
         }
 
-        SocketManager.onGameStarted = { state ->
+        SocketManager.onGameStarted = { _ ->
             runOnUiThread {
-                val intent = Intent(this, GameActivity::class.java).apply {
+                startActivity(Intent(this, GameActivity::class.java).apply {
                     putExtra(GameActivity.EXTRA_ROOM_CODE, roomCode)
-                }
-                startActivity(intent)
+                })
                 finish()
             }
         }
@@ -97,6 +112,9 @@ class LobbyActivity : AppCompatActivity() {
         SocketManager.onError = { msg ->
             runOnUiThread {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                binding.btnStart.isEnabled = true
+                binding.btnStart.alpha = 1.0f
+                binding.btnStart.text = "START GAME"
             }
         }
     }
@@ -105,6 +123,7 @@ class LobbyActivity : AppCompatActivity() {
         super.onDestroy()
         SocketManager.onRoomUpdate = null
         SocketManager.onGameStarted = null
+        SocketManager.onError = null
     }
 }
 
