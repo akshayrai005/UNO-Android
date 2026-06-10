@@ -57,6 +57,10 @@ class GameActivity : AppCompatActivity() {
         viewModel.currentUsername = username
         viewModel.initSocket()
 
+        // Rejoin the socket room — GameActivity opens a fresh socket context.
+        // The server will immediately reply with game_state for this player.
+        SocketManager.joinRoom(roomCode, playerId, username)
+
         SoundManager.init(this)
         setupRecyclerViews()
         setupButtons()
