@@ -10,8 +10,8 @@
     <dimen name="card_overlap">52dp</dimen>
 
     <!-- Draw / discard pile -->
-    <dimen name="pile_width">80dp</dimen>
-    <dimen name="pile_height">120dp</dimen>
+    <dimen name="pile_width">110dp</dimen>
+    <dimen name="pile_height">160dp</dimen>
 
     <!-- Spacing -->
     <dimen name="spacing_xs">4dp</dimen>

@@ -278,6 +278,17 @@ class GameActivity : AppCompatActivity() {
                     android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
                 binding.tvPendingDraw.text = "⚠️ Must draw ${state.pendingDraw}"
                 binding.tvPendingDraw.visibility = View.VISIBLE
+
+                // Auto-draw penalty if it's your turn and you can't stack
+                if (isMyTurn) {
+                    val canStack = myHand.any { c ->
+                        (state.topCard?.value == "draw2" && c.value == "draw2") ||
+                        (state.topCard?.value == "wild_draw4" && c.value == "wild_draw4")
+                    }
+                    if (!canStack) {
+                        Handler(Looper.getMainLooper()).postDelayed({ drawCard() }, 900)
+                    }
+                }
             } else {
                 binding.btnDraw.text = getString(R.string.draw_card)
                 binding.btnDraw.backgroundTintList =
