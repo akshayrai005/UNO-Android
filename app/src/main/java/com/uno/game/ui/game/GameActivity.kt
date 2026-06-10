@@ -22,6 +22,7 @@ import com.uno.game.databinding.DialogColorPickerBinding
 import com.uno.game.databinding.DialogWinnerBinding
 import com.uno.game.models.GameState
 import com.uno.game.models.UnoCard
+import com.uno.game.network.SocketManager
 import com.uno.game.utils.PreferencesManager
 
 class GameActivity : AppCompatActivity() {
