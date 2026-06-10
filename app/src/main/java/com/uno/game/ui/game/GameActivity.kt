@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.uno.game.R
 import com.uno.game.audio.SoundManager
+import com.uno.game.audio.VoiceChatManager
 import com.uno.game.databinding.ActivityGameBinding
 import com.uno.game.databinding.DialogColorPickerBinding
 import com.uno.game.databinding.DialogWinnerBinding
@@ -39,6 +40,8 @@ class GameActivity : AppCompatActivity() {
     private var pendingWildCard: UnoCard? = null
     private var lastTopCardId: String? = null
     private var isMuted = false
+    private var isMicMuted = false
+    private lateinit var voiceChat: VoiceChatManager
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
@@ -70,6 +73,8 @@ class GameActivity : AppCompatActivity() {
         SoundManager.init(this)
         SoundManager.playShuffle()   // satisfying shuffle on game entry
         requestMicrophonePermission()
+        voiceChat = VoiceChatManager(this, roomCode)
+        voiceChat.initialize()
         setupRecyclerViews()
         setupButtons()
         observeGame()
@@ -122,6 +127,19 @@ class GameActivity : AppCompatActivity() {
             binding.btnMuteSound.setImageResource(
                 if (isMuted) R.drawable.ic_sound_off else R.drawable.ic_sound_on
             )
+        }
+
+        binding.btnMuteMic.setOnClickListener {
+            isMicMuted = voiceChat.toggleMute()
+            binding.btnMuteMic.setImageResource(
+                if (isMicMuted) R.drawable.ic_mic_off else R.drawable.ic_mic_on
+            )
+            binding.btnMuteMic.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.parseColor(
+                        if (isMicMuted) "#B71C1C" else "#37474F"
+                    )
+                )
         }
     }
 
@@ -500,5 +518,6 @@ class GameActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         SoundManager.release()
+        if (::voiceChat.isInitialized) voiceChat.release()
     }
 }
