@@ -1,7 +1,9 @@
 package com.uno.game.ui.game
 
+import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -14,6 +16,8 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.uno.game.R
 import com.uno.game.audio.SoundManager
@@ -39,6 +43,7 @@ class GameActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
         private const val TAG = "GameActivity"
+        private const val REQUEST_MIC_PERMISSION = 1001
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -448,6 +453,34 @@ class GameActivity : AppCompatActivity() {
     private fun shakeView(view: View) {
         ObjectAnimator.ofFloat(view, "translationX",
             0f, -14f, 14f, -10f, 10f, -5f, 5f, 0f).apply { duration = 350; start() }
+    }
+
+    // ── Microphone permission ─────────────────────────────────────────────────
+    private fun requestMicrophonePermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_MIC_PERMISSION
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_MIC_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Microphone permission granted")
+            } else {
+                Log.w(TAG, "Microphone permission denied — voice chat unavailable")
+            }
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
