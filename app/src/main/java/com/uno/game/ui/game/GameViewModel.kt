@@ -25,24 +25,24 @@ class GameViewModel : ViewModel() {
     private val _playerFinishedEvent = MutableLiveData<Pair<String,Int>>()
     val playerFinishedEvent: LiveData<Pair<String,Int>> = _playerFinishedEvent
 
+    // Fired when a drawn card is auto-played: Pair(playerId, cardValue)
+    private val _cardAutoPlayedEvent = MutableLiveData<Pair<String,String>>()
+    val cardAutoPlayedEvent: LiveData<Pair<String,String>> = _cardAutoPlayedEvent
+
     var currentPlayerId: String = ""
     var currentUsername: String = ""
     var roomCode: String = ""
 
     fun initSocket() {
-        if (!SocketManager.isConnected()) {
-            SocketManager.connect()
-        }
+        if (!SocketManager.isConnected()) SocketManager.connect()
 
         SocketManager.onGameStarted = { state ->
-            Log.d("GameViewModel", "game_started --- players=\${state.players.size}")
+            Log.d("GameViewModel", "game_started --- players=${state.players.size}")
             _gameState.postValue(state)
         }
         SocketManager.onGameState = { state ->
-            Log.d("GameViewModel", "game_state --- currentPlayer=\${state.currentPlayerId}")
+            Log.d("GameViewModel", "game_state --- currentPlayer=${state.currentPlayerId}")
             _gameState.postValue(state)
-            // Only show Game Over when the game is FULLY finished (like Ludo — last player standing loses)
-            // not when the first player empties their hand.
             if (state.status == "finished") {
                 state.winner?.takeIf { it.isNotBlank() }?.let { _winnerEvent.postValue(it) }
             }
@@ -53,12 +53,13 @@ class GameViewModel : ViewModel() {
         SocketManager.onPlayerFinished = { playerId, position ->
             _playerFinishedEvent.postValue(Pair(playerId, position))
         }
+        SocketManager.onCardAutoPlayed = { playerId, cardValue ->
+            _cardAutoPlayedEvent.postValue(Pair(playerId, cardValue))
+        }
         SocketManager.onError = { msg ->
             _errorMessage.postValue(msg)
         }
 
-        // Request current game state immediately — game_started may have already
-        // fired in LobbyActivity before this screen existed.
         SocketManager.requestGameState(roomCode)
     }
 
@@ -89,6 +90,7 @@ class GameViewModel : ViewModel() {
         SocketManager.onGameState = null
         SocketManager.onUnoCalled = null
         SocketManager.onPlayerFinished = null
+        SocketManager.onCardAutoPlayed = null
         SocketManager.onError = null
     }
 }
