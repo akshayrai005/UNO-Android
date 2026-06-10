@@ -21,6 +21,7 @@ class LobbyActivity : AppCompatActivity() {
 
     private var roomCode   = ""
     private var playerId   = ""
+    private var username   = ""
     private var isHost     = false
     private var currentPlayerCount = 0
 
@@ -37,12 +38,11 @@ class LobbyActivity : AppCompatActivity() {
         roomCode = intent.getStringExtra(EXTRA_ROOM_CODE) ?: run { finish(); return }
         isHost   = intent.getBooleanExtra(EXTRA_IS_HOST, false)
         playerId = PreferencesManager.getPlayerId(this) ?: run { finish(); return }
-        val username = PreferencesManager.getUsername(this) ?: run { finish(); return }
+        username = PreferencesManager.getUsername(this) ?: run { finish(); return }
 
         binding.tvRoomCode.text = roomCode
         PreferencesManager.saveLastRoom(this, roomCode)
 
-        // Start button — only visible for host
         if (isHost) {
             binding.btnStart.visibility = View.VISIBLE
             updateStartButton()
@@ -60,16 +60,7 @@ class LobbyActivity : AppCompatActivity() {
         }
 
         setupSocketListeners()
-
-        // Join the room (with small delay if socket just connected)
-        if (!SocketManager.isConnected()) {
-            SocketManager.connect()
-            Handler(Looper.getMainLooper()).postDelayed({
-                SocketManager.joinRoom(roomCode, playerId, username)
-            }, 1000)
-        } else {
-            SocketManager.joinRoom(roomCode, playerId, username)
-        }
+        connectAndJoin()
 
         binding.btnStart.setOnClickListener { handleStartClick() }
 
@@ -80,8 +71,58 @@ class LobbyActivity : AppCompatActivity() {
         }
     }
 
-    // ── Start button ─────────────────────────────────────────────────────────
+    // ── onResume: reconnect + rejoin whenever app comes back to foreground ────
+    override fun onResume() {
+        super.onResume()
+        // Always ensure socket is connected and we're in the room when resuming
+        // (handles: switching apps to share code, returning from notification bar, etc.)
+        if (!SocketManager.isConnected()) {
+            showReconnectingState()
+            SocketManager.connect()
+            // Give it 1.5s to connect then rejoin
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (SocketManager.isConnected()) {
+                    joinRoom()
+                } else {
+                    // Still not connected — socket.io will keep retrying, onReconnected will fire
+                    Toast.makeText(this, "⏳ Reconnecting to server...", Toast.LENGTH_SHORT).show()
+                }
+            }, 1500)
+        } else {
+            // Already connected — just re-emit join_room to refresh player list
+            // This is cheap and idempotent on the server side
+            joinRoom()
+        }
+    }
 
+    override fun onPause() {
+        super.onPause()
+        // Don't disconnect here — let the socket stay alive in background
+        // The socket.io library handles background reconnection automatically
+    }
+
+    // ── Connect + join helper ─────────────────────────────────────────────────
+    private fun connectAndJoin() {
+        if (!SocketManager.isConnected()) {
+            SocketManager.connect()
+            Handler(Looper.getMainLooper()).postDelayed({ joinRoom() }, 1000)
+        } else {
+            joinRoom()
+        }
+    }
+
+    private fun joinRoom() {
+        SocketManager.joinRoom(roomCode, playerId, username)
+    }
+
+    private fun showReconnectingState() {
+        if (isHost) {
+            binding.btnStart.isEnabled = false
+            binding.btnStart.text = "⏳ Reconnecting..."
+        }
+    }
+
+    // ── Start button ──────────────────────────────────────────────────────────
     private fun handleStartClick() {
         if (!isHost) return
         if (!SocketManager.isConnected()) {
@@ -106,17 +147,26 @@ class LobbyActivity : AppCompatActivity() {
         binding.btnStart.text      = "Starting…"
     }
 
-    // ── Socket ────────────────────────────────────────────────────────────────
-
+    // ── Socket listeners ──────────────────────────────────────────────────────
     private fun setupSocketListeners() {
+
+        // After socket reconnects automatically → re-join the room immediately
+        SocketManager.onReconnected = {
+            runOnUiThread {
+                joinRoom()
+                Toast.makeText(this, "✅ Reconnected!", Toast.LENGTH_SHORT).show()
+                if (isHost) updateStartButton()
+            }
+        }
+
         SocketManager.onConnectionChange = { connected ->
             runOnUiThread {
                 if (!connected) {
-                    Toast.makeText(this, "⚠️ Disconnected from server…", Toast.LENGTH_SHORT).show()
                     if (isHost) {
                         binding.btnStart.isEnabled = false
-                        binding.btnStart.text = "Reconnecting…"
+                        binding.btnStart.text = "⏳ Reconnecting..."
                     }
+                    // Don't show annoying toast every disconnect — socket.io will auto-reconnect
                 } else {
                     if (isHost) updateStartButton()
                 }
@@ -130,14 +180,13 @@ class LobbyActivity : AppCompatActivity() {
                 for (i in 0 until playersArray.length()) {
                     val p = playersArray.getJSONObject(i)
                     list.add(LobbyPlayer(
-                        id            = p.optString("id"),
-                        username      = p.optString("username"),
-                        avatarColor   = p.optString("avatar_color", "#FF6B6B"),
-                        seatPosition  = p.optInt("seat_position")
+                        id           = p.optString("id"),
+                        username     = p.optString("username"),
+                        avatarColor  = p.optString("avatar_color", "#FF6B6B"),
+                        seatPosition = p.optInt("seat_position")
                     ))
                 }
             }
-            // Detect host from room JSON if available
             val hostFromJson = json.optString("host_id", "")
             runOnUiThread {
                 if (hostFromJson.isNotBlank()) playerAdapter.hostId = hostFromJson
@@ -166,7 +215,6 @@ class LobbyActivity : AppCompatActivity() {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
     private fun updateStartButton() {
         if (!isHost) return
         if (currentPlayerCount >= 2) {
@@ -182,10 +230,11 @@ class LobbyActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        SocketManager.onRoomUpdate      = null
-        SocketManager.onGameStarted     = null
-        SocketManager.onError           = null
+        SocketManager.onRoomUpdate       = null
+        SocketManager.onGameStarted      = null
+        SocketManager.onError            = null
         SocketManager.onConnectionChange = null
+        SocketManager.onReconnected      = null
     }
 }
 
