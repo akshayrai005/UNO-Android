@@ -19,42 +19,32 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
     )
 
     fun initialize() {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(context)
-                .setEnableInternalTracer(true)
-                .createInitializationOptions()
-        )
-        val options = PeerConnectionFactory.Options()
-        val audioConstraints = MediaConstraints()
-        audioConstraints.mandatory.add(MediaConstraints.KeyValuePair("echoCancellation", "true"))
-        audioConstraints.mandatory.add(MediaConstraints.KeyValuePair("noiseSuppression", "true"))
-        audioConstraints.mandatory.add(MediaConstraints.KeyValuePair("autoGainControl", "true"))
+        val initOptions = PeerConnectionFactory.InitializationOptions.builder(context)
+            .setEnableInternalTracer(true)
+            .createInitializationOptions()
+        PeerConnectionFactory.initialize(initOptions)
 
+        val options = PeerConnectionFactory.Options()
         peerConnectionFactory = PeerConnectionFactory.builder()
             .setOptions(options)
             .createPeerConnectionFactory()
 
+        val audioConstraints = MediaConstraints().apply {
+            mandatory.add(MediaConstraints.KeyValuePair("echoCancellation", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("noiseSuppression", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("autoGainControl", "true"))
+        }
         val audioSource = peerConnectionFactory.createAudioSource(audioConstraints)
         localAudioTrack = peerConnectionFactory.createAudioTrack("audio_local", audioSource)
 
-        // Setup socket callbacks for signaling
-        SocketManager.onVoicePeerJoined = { socketId ->
-            Log.d(TAG, "Voice peer joined: $socketId")
-            createOfferFor(socketId)
-        }
+        SocketManager.onVoicePeerJoined = { socketId -> createOfferFor(socketId) }
         SocketManager.onVoicePeerLeft = { socketId ->
             peerConnections[socketId]?.close()
             peerConnections.remove(socketId)
         }
-        SocketManager.onVoiceOffer = { fromSocketId, offer ->
-            handleOffer(fromSocketId, offer)
-        }
-        SocketManager.onVoiceAnswer = { fromSocketId, answer ->
-            handleAnswer(fromSocketId, answer)
-        }
-        SocketManager.onVoiceIceCandidate = { fromSocketId, candidate ->
-            handleIceCandidate(fromSocketId, candidate)
-        }
+        SocketManager.onVoiceOffer = { fromSocketId, offer -> handleOffer(fromSocketId, offer) }
+        SocketManager.onVoiceAnswer = { fromSocketId, answer -> handleAnswer(fromSocketId, answer) }
+        SocketManager.onVoiceIceCandidate = { fromSocketId, candidate -> handleIceCandidate(fromSocketId, candidate) }
 
         SocketManager.joinVoice(roomCode)
         Log.d(TAG, "Voice chat initialized for room $roomCode")
@@ -73,11 +63,10 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
                     SocketManager.sendIceCandidate(remoteSocketId, json)
                 }
             }
-            override fun onConnectionChange(state: PeerConnection.PeerConnectionState?) {
-                Log.d(TAG, "Connection state to $remoteSocketId: $state")
-            }
             override fun onSignalingChange(p0: PeerConnection.SignalingState?) {}
-            override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {}
+            override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {
+                Log.d(TAG, "ICE state $remoteSocketId: $p0")
+            }
             override fun onIceConnectionReceivingChange(p0: Boolean) {}
             override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {}
             override fun onAddStream(p0: MediaStream?) {}
@@ -86,10 +75,10 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
             override fun onRenegotiationNeeded() {}
             override fun onAddTrack(p0: RtpReceiver?, p1: Array<out MediaStream>?) {}
             override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
-            override fun onTrack(transceiver: RtpTransceiver?) {}
-        })
-        conn?.addTrack(localAudioTrack)
-        peerConnections[remoteSocketId] = conn!!
+        }) ?: return null
+
+        conn.addTrack(localAudioTrack)
+        peerConnections[remoteSocketId] = conn
         return conn
     }
 
@@ -114,7 +103,7 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
                 }, sdp)
             }
             override fun onSetSuccess() {}
-            override fun onCreateFailure(p0: String?) {}
+            override fun onCreateFailure(p0: String?) { Log.e(TAG, "Offer failed: $p0") }
             override fun onSetFailure(p0: String?) {}
         }, constraints)
     }
@@ -148,7 +137,7 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
                         }, answerSdp)
                     }
                     override fun onSetSuccess() {}
-                    override fun onCreateFailure(p0: String?) {}
+                    override fun onCreateFailure(p0: String?) { Log.e(TAG, "Answer failed: $p0") }
                     override fun onSetFailure(p0: String?) {}
                 }, constraints)
             }
@@ -165,7 +154,7 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
         )
         peerConnections[fromSocketId]?.setRemoteDescription(object : SdpObserver {
             override fun onCreateSuccess(p0: SessionDescription?) {}
-            override fun onSetSuccess() { Log.d(TAG, "Remote description set for $fromSocketId") }
+            override fun onSetSuccess() { Log.d(TAG, "Answer set for $fromSocketId") }
             override fun onCreateFailure(p0: String?) {}
             override fun onSetFailure(p0: String?) {}
         }, sdp)
@@ -173,12 +162,12 @@ class VoiceChatManager(private val context: Context, private val roomCode: Strin
 
     private fun handleIceCandidate(fromSocketId: String, candidate: Any) {
         val json = JSONObject(candidate.toString())
-        val iceCandidate = IceCandidate(
+        val ice = IceCandidate(
             json.optString("sdpMid"),
             json.optInt("sdpMLineIndex"),
             json.optString("candidate")
         )
-        peerConnections[fromSocketId]?.addIceCandidate(iceCandidate)
+        peerConnections[fromSocketId]?.addIceCandidate(ice)
     }
 
     fun toggleMute(): Boolean {
