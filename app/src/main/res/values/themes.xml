@@ -17,10 +17,10 @@
     </style>
 
     <style name="Theme.UNO.Splash" parent="Theme.SplashScreen">
-        <!-- Full baby photo as the splash screen background -->
+        <!-- Black background -->
         <item name="windowSplashScreenBackground">@android:color/black</item>
-        <!-- Use a transparent 1x1 icon so NO round icon appears -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bg</item>
+        <!-- "Hi" icon instead of baby circle -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_hi_icon</item>
         <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <!-- After splash, transition to the real splash activity theme -->
         <item name="postSplashScreenTheme">@style/Theme.UNO.SplashActivity</item>
