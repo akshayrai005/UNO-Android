@@ -54,7 +54,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Draw pile (card back stack look) -->
         <LinearLayout
             android:id="@+id/btnDrawPile"
             android:layout_width="@dimen/pile_width"
@@ -70,7 +69,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             android:layout_marginEnd="10dp">
 
-            <!-- Stacked card effect -->
             <View
                 android:layout_width="62dp"
                 android:layout_height="88dp"
@@ -100,7 +98,6 @@
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
-        <!-- Invisible center divider for constraint anchoring -->
         <View
             android:id="@+id/dividerCenter"
             android:layout_width="20dp"
@@ -110,7 +107,6 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
-        <!-- Discard pile — top card -->
         <FrameLayout
             android:id="@+id/layoutDiscard"
             android:layout_width="@dimen/pile_width"
@@ -121,7 +117,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             android:layout_marginStart="10dp">
 
-            <!-- Empty discard bg -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -134,7 +129,6 @@
                 android:visibility="invisible" />
         </FrameLayout>
 
-        <!-- Current color dot — top-right overlay -->
         <LinearLayout
             android:id="@+id/layoutColorInfo"
             android:layout_width="wrap_content"
@@ -162,7 +156,6 @@
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
-        <!-- Direction indicator — top-left -->
         <TextView
             android:id="@+id/tvDirection"
             android:layout_width="wrap_content"
@@ -178,7 +171,7 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  INFO ROW — deck count, pending draw                               -->
+    <!--  INFO ROW                                                          -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/layoutInfo"
@@ -240,7 +233,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Draw button -->
         <Button
             android:id="@+id/btnDraw"
             android:layout_width="0dp"
@@ -253,7 +245,6 @@
             android:layout_marginEnd="6dp"
             style="@style/Button.UNO.Action" />
 
-        <!-- UNO button -->
         <Button
             android:id="@+id/btnUno"
             android:layout_width="0dp"
@@ -267,7 +258,6 @@
             android:layout_marginEnd="6dp"
             style="@style/Button.UNO.Action" />
 
-        <!-- Sound toggle -->
         <ImageButton
             android:id="@+id/btnMuteSound"
             android:layout_width="46dp"
@@ -277,7 +267,6 @@
             android:contentDescription="Toggle sound"
             android:padding="10dp" />
 
-        <!-- Mic toggle -->
         <ImageButton
             android:id="@+id/btnMuteMic"
             android:layout_width="46dp"
@@ -291,7 +280,46 @@
     </LinearLayout>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  GAME EVENT TOAST OVERLAY (UNO!, Skip, Reverse, +2, +4)           -->
+    <!--  SPECTATOR OVERLAY — shown when local player has finished          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/layoutSpectator"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#CC0A0A2A"
+        android:paddingVertical="14dp"
+        android:paddingHorizontal="20dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/tvSpectatorTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="👀 SPECTATING"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#FFD700"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/tvSpectatorSub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Waiting for game to finish..."
+            android:textSize="13sp"
+            android:textColor="#AAFFFFFF"
+            android:gravity="center"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  GAME EVENT TOAST OVERLAY                                         -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <TextView
         android:id="@+id/tvEventToast"
