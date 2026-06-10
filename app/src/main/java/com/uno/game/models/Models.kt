@@ -37,7 +37,8 @@ data class Player(
     val hand: List<UnoCard>? = null,
     val saidUno: Boolean = false,
     @SerializedName("seat_position") val seatPosition: Int = 0,
-    @SerializedName("is_connected") val isConnected: Boolean = true
+    @SerializedName("is_connected") val isConnected: Boolean = true,
+    val finishPosition: Int? = null   // null = still playing, 1 = 1st to finish, etc.
 )
 
 data class Room(
