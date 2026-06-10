@@ -19,7 +19,7 @@ class UnoCardView @JvmOverloads constructor(
     private var card: UnoCard? = null
     var isPlayable: Boolean = true
         set(value) { field = value; invalidate() }
-    var isSelected: Boolean = false
+    var isCardSelected: Boolean = false
         set(value) { field = value; invalidate() }
     var showBack: Boolean = false
         set(value) { field = value; invalidate() }
@@ -123,7 +123,7 @@ class UnoCardView @JvmOverloads constructor(
         val display = card.getDisplayValue()
 
         // Playable glow
-        if (isPlayable && isSelected) {
+        if (isPlayable && isCardSelected) {
             paintGlow.strokeWidth = 8f
             canvas.drawRoundRect(-2f, -2f, w + 2f, h + 2f, r + 2f, r + 2f, paintGlow)
         }

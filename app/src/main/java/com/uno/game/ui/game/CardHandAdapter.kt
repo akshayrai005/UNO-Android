@@ -35,7 +35,7 @@ class CardHandAdapter(
 
             cardView.setCard(card)
             cardView.isPlayable = playable
-            cardView.isSelected = selected
+            cardView.isCardSelected = selected
 
             // Apply visual alpha / scale based on playability
             itemView.alpha  = if (playable) 1f else 0.45f
