@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.uno.game.R
 import com.uno.game.databinding.ActivityLobbyBinding
+import com.uno.game.network.SocketKeepAliveService
 import com.uno.game.network.SocketManager
 import com.uno.game.ui.game.GameActivity
 import com.uno.game.utils.PreferencesManager
@@ -71,37 +72,34 @@ class LobbyActivity : AppCompatActivity() {
         }
     }
 
-    // ── onResume: reconnect + rejoin whenever app comes back to foreground ────
+    override fun onStart() {
+        super.onStart()
+        // Start foreground service to keep socket alive when app is in background
+        SocketKeepAliveService.start(this)
+    }
+
     override fun onResume() {
         super.onResume()
-        // Always ensure socket is connected and we're in the room when resuming
-        // (handles: switching apps to share code, returning from notification bar, etc.)
+        // Always reconnect + rejoin when coming back to foreground
         if (!SocketManager.isConnected()) {
             showReconnectingState()
             SocketManager.connect()
-            // Give it 1.5s to connect then rejoin
             Handler(Looper.getMainLooper()).postDelayed({
-                if (SocketManager.isConnected()) {
-                    joinRoom()
-                } else {
-                    // Still not connected — socket.io will keep retrying, onReconnected will fire
-                    Toast.makeText(this, "⏳ Reconnecting to server...", Toast.LENGTH_SHORT).show()
-                }
+                if (SocketManager.isConnected()) joinRoom()
+                else Toast.makeText(this, "⏳ Reconnecting to server...", Toast.LENGTH_SHORT).show()
             }, 1500)
         } else {
-            // Already connected — just re-emit join_room to refresh player list
-            // This is cheap and idempotent on the server side
+            // Already connected — re-emit join to refresh player list
             joinRoom()
         }
     }
 
     override fun onPause() {
         super.onPause()
-        // Don't disconnect here — let the socket stay alive in background
-        // The socket.io library handles background reconnection automatically
+        // Socket stays alive via SocketKeepAliveService — don't disconnect
     }
 
-    // ── Connect + join helper ─────────────────────────────────────────────────
+    // ── Connect + join ────────────────────────────────────────────────────────
     private fun connectAndJoin() {
         if (!SocketManager.isConnected()) {
             SocketManager.connect()
@@ -150,7 +148,6 @@ class LobbyActivity : AppCompatActivity() {
     // ── Socket listeners ──────────────────────────────────────────────────────
     private fun setupSocketListeners() {
 
-        // After socket reconnects automatically → re-join the room immediately
         SocketManager.onReconnected = {
             runOnUiThread {
                 joinRoom()
@@ -166,7 +163,6 @@ class LobbyActivity : AppCompatActivity() {
                         binding.btnStart.isEnabled = false
                         binding.btnStart.text = "⏳ Reconnecting..."
                     }
-                    // Don't show annoying toast every disconnect — socket.io will auto-reconnect
                 } else {
                     if (isHost) updateStartButton()
                 }
@@ -199,6 +195,8 @@ class LobbyActivity : AppCompatActivity() {
 
         SocketManager.onGameStarted = { _ ->
             runOnUiThread {
+                // Stop keep-alive service — game activity manages its own connection
+                SocketKeepAliveService.stop(this)
                 startActivity(Intent(this, GameActivity::class.java).apply {
                     putExtra(GameActivity.EXTRA_ROOM_CODE, roomCode)
                 })
@@ -230,6 +228,7 @@ class LobbyActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        SocketKeepAliveService.stop(this)
         SocketManager.onRoomUpdate       = null
         SocketManager.onGameStarted      = null
         SocketManager.onError            = null
