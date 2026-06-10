@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="28dp"
+    android:padding="24dp"
     android:background="@drawable/bg_form_card">
 
     <TextView
@@ -12,7 +12,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="🎉"
-        android:textSize="56sp"
+        android:textSize="48sp"
         android:layout_marginBottom="4dp" />
 
     <TextView
@@ -24,15 +24,31 @@
         android:textStyle="bold"
         android:textColor="@color/turn_gold"
         android:letterSpacing="0.12"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="12dp" />
 
-    <!-- Rankings list -->
-    <LinearLayout
-        android:id="@+id/layoutRankings"
+    <!-- Scrollable rankings so dialog doesn't cover the whole screen -->
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginBottom="20dp" />
+        android:maxHeight="220dp">
+
+        <LinearLayout
+            android:id="@+id/layoutRankings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="4dp" />
+    </ScrollView>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🎙️ Mic &amp; Speaker still available below"
+        android:textSize="11sp"
+        android:textColor="#88FFFFFF"
+        android:gravity="center"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp" />
 
     <Button
         android:id="@+id/btnBackToMenu"
