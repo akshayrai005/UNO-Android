@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- Full-screen baby photo -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/splash_bg"
+        android:scaleType="centerCrop"
+        android:contentDescription="Srivi" />
+
+    <!-- Dark gradient at bottom -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="280dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/splash_gradient" />
+
+    <!-- App name at bottom -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingBottom="80dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎴 Srivi Fun Cards"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:shadowColor="#AA000000"
+            android:shadowDx="2"
+            android:shadowDy="2"
+            android:shadowRadius="6"
+            android:letterSpacing="0.05" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Play with Family 💕"
+            android:textSize="16sp"
+            android:textColor="#DDFFFFFF"
+            android:layout_marginTop="8dp"
+            android:shadowColor="#AA000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="4" />
+
+    </LinearLayout>
+
+</FrameLayout>

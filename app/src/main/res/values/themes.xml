@@ -16,6 +16,15 @@
         <item name="android:fontFamily">sans-serif</item>
     </style>
 
+    <style name="Theme.UNO.Splash" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
     <style name="Theme.UNO.Home" parent="Theme.UNO">
         <item name="android:windowBackground">@color/bg_home</item>
         <item name="android:statusBarColor">@color/bg_home</item>
