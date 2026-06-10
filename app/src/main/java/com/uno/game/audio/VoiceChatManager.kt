@@ -3,7 +3,6 @@ package com.uno.game.audio
 import android.content.Context
 import android.util.Log
 import com.uno.game.network.SocketManager
-import io.getstream.webrtc.android.api.audio.AudioDeviceModule
 import org.webrtc.*
 
 /**
@@ -114,14 +113,16 @@ class VoiceChatManager(
 
         SocketManager.onVoiceAnswer = { fromSocketId, answerObj ->
             Log.d(TAG, "Received answer from $fromSocketId")
-            val pc = peers[fromSocketId] ?: return@run
-            val sdp = SessionDescription(
-                SessionDescription.Type.ANSWER,
-                answerObj.toString().extractSdp()
-            )
-            pc.setRemoteDescription(SimpleSdpObserver("setRemote-answer"), sdp)
-            pendingCandidates[fromSocketId]?.forEach { pc.addIceCandidate(it) }
-            pendingCandidates.remove(fromSocketId)
+            val pc = peers[fromSocketId]
+            if (pc != null) {
+                val sdp = SessionDescription(
+                    SessionDescription.Type.ANSWER,
+                    answerObj.toString().extractSdp()
+                )
+                pc.setRemoteDescription(SimpleSdpObserver("setRemote-answer"), sdp)
+                pendingCandidates[fromSocketId]?.forEach { pc.addIceCandidate(it) }
+                pendingCandidates.remove(fromSocketId)
+            }
         }
 
         SocketManager.onVoiceIceCandidate = { fromSocketId, candidateObj ->
