@@ -24,6 +24,9 @@ object SocketManager {
     var onError: ((String) -> Unit)? = null
     var onConnectionChange: ((Boolean) -> Unit)? = null
 
+    // Called when server auto-plays a drawn card (playerId, cardValue)
+    var onCardAutoPlayed: ((String, String) -> Unit)? = null
+
     // Voice chat callbacks
     var onVoicePeerJoined: ((String) -> Unit)? = null
     var onVoicePeerLeft: ((String) -> Unit)? = null
@@ -63,11 +66,9 @@ object SocketManager {
             }
             on("room_update") { args ->
                 val obj = args[0] as JSONObject
-                Log.d(TAG, "room_update: $obj")
                 onRoomUpdate?.invoke(obj)
             }
             on("game_started") { args ->
-                Log.d(TAG, "game_started: ${args[0]}")
                 parseGameState(args[0])?.let { onGameStarted?.invoke(it) }
             }
             on("game_state") { args ->
@@ -93,6 +94,14 @@ object SocketManager {
                 val msg = obj.optString("message")
                 Log.e(TAG, "Server error: $msg")
                 onError?.invoke(msg)
+            }
+            // Auto-played card notification (drawn card matched and was played automatically)
+            on("card_auto_played") { args ->
+                val obj = args[0] as JSONObject
+                val playerId = obj.optString("playerId")
+                val cardValue = obj.optJSONObject("card")?.optString("value") ?: ""
+                Log.d(TAG, "card_auto_played: player=$playerId card=$cardValue")
+                onCardAutoPlayed?.invoke(playerId, cardValue)
             }
             // Voice
             on("voice_peer_joined") { args ->
@@ -140,20 +149,14 @@ object SocketManager {
             put("roomCode", roomCode)
             put("playerId", playerId)
         }
-        Log.d(TAG, "startGame emit — connected=${socket?.connected()}, data=$data")
         if (socket?.connected() == true) {
             socket?.emit("start_game", data)
         } else {
-            Log.w(TAG, "Not connected! Attempting reconnect before start...")
             onError?.invoke("Not connected to server. Trying to reconnect...")
-            // Try to reconnect and re-emit
             socket?.connect()
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (socket?.connected() == true) {
-                    socket?.emit("start_game", data)
-                } else {
-                    onError?.invoke("Still not connected. Check your internet connection.")
-                }
+                if (socket?.connected() == true) socket?.emit("start_game", data)
+                else onError?.invoke("Still not connected. Check your internet connection.")
             }, 2000)
         }
     }
@@ -189,13 +192,8 @@ object SocketManager {
         })
     }
 
-    fun joinVoice(roomCode: String) {
-        emit("voice_join", JSONObject().put("roomCode", roomCode))
-    }
-
-    fun leaveVoice(roomCode: String) {
-        emit("voice_leave", JSONObject().put("roomCode", roomCode))
-    }
+    fun joinVoice(roomCode: String) = emit("voice_join", JSONObject().put("roomCode", roomCode))
+    fun leaveVoice(roomCode: String) = emit("voice_leave", JSONObject().put("roomCode", roomCode))
 
     fun sendVoiceOffer(targetSocketId: String, offer: Any, roomCode: String) {
         emit("voice_offer", JSONObject().apply {
@@ -220,26 +218,15 @@ object SocketManager {
     }
 
     private fun emit(event: String, data: JSONObject) {
-        if (socket?.connected() == true) {
-            socket?.emit(event, data)
-        } else {
-            Log.w(TAG, "Not connected, can't emit $event")
-        }
+        if (socket?.connected() == true) socket?.emit(event, data)
+        else Log.w(TAG, "Not connected, can't emit $event")
     }
 
-
     fun requestGameState(roomCode: String) {
-        emit("get_game_state", JSONObject().apply {
-            put("roomCode", roomCode)
-        })
+        emit("get_game_state", JSONObject().apply { put("roomCode", roomCode) })
     }
 
     fun getSocketId(): String? = socket?.id()
-
-    fun disconnect() {
-        socket?.disconnect()
-        socket = null
-    }
-
+    fun disconnect() { socket?.disconnect(); socket = null }
     fun isConnected(): Boolean = socket?.connected() == true
 }
