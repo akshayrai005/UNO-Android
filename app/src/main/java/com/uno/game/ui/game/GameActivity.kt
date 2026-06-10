@@ -3,11 +3,16 @@ package com.uno.game.ui.game
 import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -43,14 +48,14 @@ class GameActivity : AppCompatActivity() {
     private var isMicMuted = false
     private lateinit var voiceChat: VoiceChatManager
 
-    // Prevent double auto-draw triggers
     private var autoDrawPending = false
+    private var wasMyTurn = false          // track turn transitions for vibrate
+    private var isSpectating = false       // true once local player finishes
 
     companion object {
         const val EXTRA_ROOM_CODE = "room_code"
         private const val TAG = "GameActivity"
         private const val REQUEST_MIC_PERMISSION = 1001
-        // Delay before auto-draw so player can see the state first
         private const val AUTO_DRAW_DELAY_MS = 800L
     }
 
@@ -84,6 +89,30 @@ class GameActivity : AppCompatActivity() {
         setTurnIndicator(null, false)
     }
 
+    // ── Vibrate ───────────────────────────────────────────────────────────────
+    private fun vibrateForMyTurn() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vm.defaultVibrator.vibrate(
+                    VibrationEffect.createWaveform(longArrayOf(0, 80, 60, 120), -1)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 80, 60, 120), -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    v.vibrate(longArrayOf(0, 80, 60, 120), -1)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibrate failed: ${e.message}")
+        }
+    }
+
+    // ── RecyclerViews ─────────────────────────────────────────────────────────
     private fun setupRecyclerViews() {
         handAdapter = CardHandAdapter { card -> onCardClicked(card) }
         binding.rvHand.apply {
@@ -103,6 +132,7 @@ class GameActivity : AppCompatActivity() {
         }
     }
 
+    // ── Buttons ───────────────────────────────────────────────────────────────
     private fun setupButtons() {
         binding.btnDrawPile.setOnClickListener { drawCard() }
         binding.btnDraw.setOnClickListener { drawCard() }
@@ -134,7 +164,9 @@ class GameActivity : AppCompatActivity() {
         }
     }
 
+    // ── Draw card ─────────────────────────────────────────────────────────────
     private fun drawCard() {
+        if (isSpectating) return
         val state = viewModel.gameState.value
         if (state == null) { showToast(getString(R.string.game_not_loaded)); return }
         if (!viewModel.isMyTurn()) {
@@ -149,7 +181,9 @@ class GameActivity : AppCompatActivity() {
         animatePileDrawPulse()
     }
 
+    // ── Card click ────────────────────────────────────────────────────────────
     private fun onCardClicked(card: UnoCard) {
+        if (isSpectating) return
         val state = viewModel.gameState.value
         if (state == null) { showToast(getString(R.string.game_not_loaded)); return }
         if (!viewModel.isMyTurn()) {
@@ -170,6 +204,7 @@ class GameActivity : AppCompatActivity() {
         SoundManager.playCardPlay()
     }
 
+    // ── Color picker ──────────────────────────────────────────────────────────
     private fun showColorPicker() {
         val dialogBinding = DialogColorPickerBinding.inflate(LayoutInflater.from(this))
         val dialog = AlertDialog.Builder(this, R.style.Theme_UNO)
@@ -193,6 +228,7 @@ class GameActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    // ── Winner dialog ─────────────────────────────────────────────────────────
     private fun showWinnerDialog(winnerId: String, state: GameState) {
         SoundManager.playWin()
         val dialogBinding = DialogWinnerBinding.inflate(LayoutInflater.from(this))
@@ -247,6 +283,25 @@ class GameActivity : AppCompatActivity() {
         )
     }
 
+    // ── Spectator mode ────────────────────────────────────────────────────────
+    private fun enterSpectatorMode(myPosition: Int) {
+        if (isSpectating) return
+        isSpectating = true
+        val medals = listOf("🥇","🥈","🥉","4th","5th","6th")
+        val medal = medals.getOrElse(myPosition - 1) { "${myPosition}th" }
+
+        // Hide hand + action controls
+        binding.rvHand.visibility = View.GONE
+        binding.layoutActionBar.visibility = View.GONE
+
+        // Show spectator bar
+        binding.layoutSpectator.visibility = View.VISIBLE
+        binding.tvSpectatorTitle.text = "👀 SPECTATING — You finished $medal!"
+        binding.tvSpectatorSub.text = "Watching the remaining players battle it out..."
+        showEventToast("$medal You finished! Now spectating 👀")
+    }
+
+    // ── Game state observer ───────────────────────────────────────────────────
     private fun observeGame() {
         viewModel.gameState.observe(this) { state ->
             var myPlayer = state.players.find { it.id == viewModel.currentPlayerId }
@@ -258,6 +313,13 @@ class GameActivity : AppCompatActivity() {
                 }
             }
 
+            // ── Check if I finished → enter spectator mode ──
+            val myFinishPos = myPlayer?.finishPosition
+            if (myFinishPos != null && !isSpectating) {
+                enterSpectatorMode(myFinishPos)
+            }
+
+            // ── Top card ──
             state.topCard?.let { card ->
                 val isNewCard = card.id != lastTopCardId
                 binding.cardTop.setCard(card)
@@ -279,60 +341,74 @@ class GameActivity : AppCompatActivity() {
             val currentColor = state.currentColor
             val isMyTurn = state.currentPlayerId == viewModel.currentPlayerId
 
-            val playableIds = if (isMyTurn && topCard != null) {
+            // ── Vibrate on turn start (only when it newly becomes my turn) ──
+            if (isMyTurn && !wasMyTurn && !isSpectating) {
+                vibrateForMyTurn()
+            }
+            wasMyTurn = isMyTurn
+
+            val playableIds = if (isMyTurn && topCard != null && !isSpectating) {
                 myHand.filter { card ->
-                    isCardPlayable(card, topCard, currentColor, state.pendingDraw)
+                    isCardPlayable(card, topCard, currentColor, state.pendingDraw, myHand)
                 }.map { it.id }.toSet()
             } else {
                 emptySet()
             }
 
-            handAdapter.playableCardIds = playableIds
-            handAdapter.submitList(myHand.toList())
+            if (!isSpectating) {
+                handAdapter.playableCardIds = playableIds
+                handAdapter.submitList(myHand.toList())
+            }
 
-            val others = state.players.filter { it.id != viewModel.currentPlayerId }
+            // Show ALL players (including me) in top rail when spectating
+            val others = if (isSpectating) {
+                state.players
+            } else {
+                state.players.filter { it.id != viewModel.currentPlayerId }
+            }
             playerListAdapter.activePlayerId = state.currentPlayerId
             playerListAdapter.submitList(others)
 
             val currentName = state.players.find { it.id == state.currentPlayerId }?.username
-            setTurnIndicator(currentName, isMyTurn)
+            setTurnIndicator(currentName, isMyTurn && !isSpectating)
 
-            binding.btnDraw.isEnabled = isMyTurn
-            binding.btnDrawPile.isEnabled = isMyTurn
+            if (!isSpectating) {
+                binding.btnDraw.isEnabled = isMyTurn
+                binding.btnDrawPile.isEnabled = isMyTurn
 
-            if (state.pendingDraw > 0) {
-                // ── Pending penalty draw (+2 or +4) ──────────────────────────
-                binding.btnDraw.text = getString(R.string.draw_penalty, state.pendingDraw)
-                binding.btnDraw.backgroundTintList =
-                    android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
-                binding.tvPendingDraw.text = "⚠️ Must draw ${state.pendingDraw}"
-                binding.tvPendingDraw.visibility = View.VISIBLE
+                if (state.pendingDraw > 0) {
+                    binding.btnDraw.text = getString(R.string.draw_penalty, state.pendingDraw)
+                    binding.btnDraw.backgroundTintList =
+                        android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
+                    binding.tvPendingDraw.text = "⚠️ Must draw ${state.pendingDraw}"
+                    binding.tvPendingDraw.visibility = View.VISIBLE
 
-                if (isMyTurn && !autoDrawPending) {
-                    val canStack = myHand.any { c ->
-                        (state.topCard?.value == "draw2" && c.value == "draw2") ||
-                        (state.topCard?.value == "wild_draw4" && c.value == "wild_draw4")
+                    if (isMyTurn && !autoDrawPending) {
+                        val canStack = myHand.any { c ->
+                            (state.topCard?.value == "draw2" && c.value == "draw2") ||
+                            (state.topCard?.value == "wild_draw4" && c.value == "wild_draw4")
+                        }
+                        if (!canStack) {
+                            autoDrawPending = true
+                            Handler(Looper.getMainLooper()).postDelayed({ drawCard() }, AUTO_DRAW_DELAY_MS)
+                        }
                     }
-                    if (!canStack) {
+                } else {
+                    binding.btnDraw.text = getString(R.string.draw_card)
+                    binding.btnDraw.backgroundTintList =
+                        android.content.res.ColorStateList.valueOf(Color.parseColor("#1E88E5"))
+                    binding.tvPendingDraw.visibility = View.GONE
+
+                    // Auto-draw when no playable card (excluding wilds which are always playable when pendingDraw=0)
+                    if (isMyTurn && !autoDrawPending && playableIds.isEmpty() && myHand.isNotEmpty()) {
                         autoDrawPending = true
+                        showEventToast("No playable card — drawing...")
                         Handler(Looper.getMainLooper()).postDelayed({ drawCard() }, AUTO_DRAW_DELAY_MS)
                     }
                 }
-            } else {
-                binding.btnDraw.text = getString(R.string.draw_card)
-                binding.btnDraw.backgroundTintList =
-                    android.content.res.ColorStateList.valueOf(Color.parseColor("#1E88E5"))
-                binding.tvPendingDraw.visibility = View.GONE
 
-                // ── Auto-draw when no playable card on a normal turn ──────────
-                if (isMyTurn && !autoDrawPending && playableIds.isEmpty() && myHand.isNotEmpty()) {
-                    autoDrawPending = true
-                    showEventToast("No playable card — drawing...")
-                    Handler(Looper.getMainLooper()).postDelayed({ drawCard() }, AUTO_DRAW_DELAY_MS)
-                }
+                binding.btnUno.visibility = if (myHand.size == 1) View.VISIBLE else View.GONE
             }
-
-            binding.btnUno.visibility = if (myHand.size == 1) View.VISIBLE else View.GONE
 
             state.lastEvent?.let { event ->
                 when {
@@ -345,7 +421,6 @@ class GameActivity : AppCompatActivity() {
             }
         }
 
-        // Auto-played drawn card toast
         viewModel.cardAutoPlayedEvent.observe(this) { (playerId, cardValue) ->
             val name = if (playerId == viewModel.currentPlayerId) "You"
                        else viewModel.gameState.value?.players?.find { it.id == playerId }?.username ?: "Someone"
@@ -368,15 +443,29 @@ class GameActivity : AppCompatActivity() {
             val name = viewModel.gameState.value?.players?.find { it.id == playerId }?.username ?: "Someone"
             val medal = medals.getOrElse(position - 1) { "$position" }
             showEventToast("$medal $name finished!")
-            if (playerId == viewModel.currentPlayerId) showToast("You finished $medal place! Game continues...")
         }
 
         viewModel.errorMessage.observe(this) { msg -> showToast(msg) }
     }
 
-    private fun isCardPlayable(card: UnoCard, topCard: UnoCard, currentColor: String?, pendingDraw: Int): Boolean {
-        if (card.isWild()) return pendingDraw == 0 || card.value == "wild_draw4"
-        if (pendingDraw > 0) return card.value == "draw2" && topCard.value == "draw2"
+    // ── Card playability check ────────────────────────────────────────────────
+    private fun isCardPlayable(
+        card: UnoCard,
+        topCard: UnoCard,
+        currentColor: String?,
+        pendingDraw: Int,
+        myHand: List<UnoCard>
+    ): Boolean {
+        if (pendingDraw > 0) {
+            // Only stacking cards valid
+            return (card.value == "draw2" && topCard.value == "draw2") ||
+                   (card.value == "wild_draw4" && topCard.value == "wild_draw4")
+        }
+        // Wild +4: only if no matching color card in hand
+        if (card.value == "wild_draw4") {
+            return myHand.none { c -> c.id != card.id && c.color == currentColor }
+        }
+        if (card.isWild()) return true
         val matchesColor = card.color == (currentColor ?: topCard.color)
         val matchesValue = card.value == topCard.value
         return matchesColor || matchesValue
@@ -394,6 +483,11 @@ class GameActivity : AppCompatActivity() {
                 binding.tvTurnIndicator.setTextColor(Color.parseColor("#FFD700"))
                 binding.tvTurnIndicator.setBackgroundResource(R.drawable.bg_turn_indicator)
                 animateScalePop(binding.tvTurnIndicator)
+            }
+            isSpectating -> {
+                binding.tvTurnIndicator.text = "👀 ${currentName}'s turn"
+                binding.tvTurnIndicator.setTextColor(Color.parseColor("#AAAAFF"))
+                binding.tvTurnIndicator.setBackgroundResource(R.drawable.bg_turn_indicator_other)
             }
             else -> {
                 binding.tvTurnIndicator.text = "🎮 ${currentName}'s turn"
