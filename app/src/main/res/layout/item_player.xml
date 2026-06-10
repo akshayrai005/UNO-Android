@@ -15,7 +15,18 @@
         android:layout_height="3dp"
         android:background="#FFD700"
         android:visibility="invisible"
-        android:layout_marginBottom="5dp" />
+        android:layout_marginBottom="3dp" />
+
+    <!-- Medal / finish position badge (shown when player finishes) -->
+    <TextView
+        android:id="@+id/tvMedal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🥇"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:layout_marginBottom="2dp" />
 
     <!-- Avatar with initial letter -->
     <FrameLayout
@@ -51,13 +62,14 @@
         android:ellipsize="end"
         android:layout_marginTop="4dp" />
 
-    <!-- Card count -->
+    <!-- Card count — big and visible -->
     <TextView
         android:id="@+id/tvCardCount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/white_70"
-        android:textSize="@dimen/text_xs"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:textStyle="bold"
         android:gravity="center"
         android:layout_marginTop="2dp" />
 
